@@ -1,0 +1,336 @@
+---
+title: Notifications API
+description: Push notifications, email tracking, and delivery stats
+head: []
+---
+
+import Tabs from '../../../components/Tabs.svelte';
+
+Manage user notifications, email delivery tracking, and push notifications via OneSignal.
+
+## Base URL
+
+All Notification endpoints are prefixed with `/v1/notifications`.
+
+## Authentication
+
+Requires `Authorization: Bearer <access_token>` header for user-specific operations.
+
+---
+
+## Get Notifications
+
+Fetch notifications for the authenticated user.
+
+**Endpoint:** `GET /v1/notifications`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const notifications = await sdk.notification.getNotifications({
+  limit: 20,
+  previous_id: null, // For pagination
+});
+
+notifications.forEach((notif) => {
+  console.log('Type:', notif.type);
+  console.log('Title:', notif.title);
+  console.log('Body:', notif.body);
+  console.log('Seen:', notif.seen);
+  console.log('Created:', new Date(notif.createdAt * 1000));
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/notifications?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "notif_abc123",
+    "userId": "user_xyz",
+    "type": "ORDER_CONFIRMED",
+    "title": "Order Confirmed",
+    "body": "Your order #1234 has been confirmed",
+    "data": {
+      "orderId": "order_1234",
+      "amount": 5999
+    },
+    "seen": false,
+    "createdAt": 1698765432
+  }
+]
+```
+
+**Notification Types:**
+- `ORDER_CONFIRMED`
+- `ORDER_SHIPPED`
+- `RESERVATION_CONFIRMED`
+- `RESERVATION_REMINDER`
+- `PAYMENT_RECEIVED`
+- `NEWSLETTER_SENT`
+- `SYSTEM_ALERT`
+
+---
+
+## Mark as Seen
+
+Mark all notifications as seen.
+
+**Endpoint:** `PUT /v1/notifications`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.notification.updateNotifications({
+  seen: true,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/notifications \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "seen": true }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Email Tracking
+
+### Track Email Open
+
+Tracking pixel endpoint for email opens.
+
+**Endpoint:** `GET /v1/notifications/track/email/{trackingPixelId}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// This is automatically called when tracking pixel loads in email
+await sdk.notification.trackEmailOpen({
+  trackingPixelId: 'pixel_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# Embedded in email HTML as:
+# <img src="https://api.arky.io/v1/notifications/track/email/PIXEL_ID" width="1" height="1" />
+
+curl "https://api.arky.io/v1/notifications/track/email/PIXEL_ID"
+```
+
+  </div>
+</Tabs>
+
+**How it Works:**
+1. When sending an email, a unique tracking pixel ID is generated
+2. HTML email includes 1x1 transparent image: `<img src=".../track/email/{id}" />`
+3. When email is opened, browser loads the image
+4. Server records the open event with timestamp and user agent
+
+---
+
+## Delivery Stats
+
+Get email delivery statistics for a business.
+
+**Endpoint:** `GET /v1/notifications/track/stats/{businessId}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const stats = await sdk.notification.getDeliveryStats({});
+
+console.log('Total sent:', stats.totalSent);
+console.log('Total delivered:', stats.totalDelivered);
+console.log('Total opened:', stats.totalOpened);
+console.log('Open rate:', `${(stats.totalOpened / stats.totalSent * 100).toFixed(2)}%`);
+console.log('Bounced:', stats.totalBounced);
+console.log('Failed:', stats.totalFailed);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/notifications/track/stats/YOUR_BUSINESS_ID" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "businessId": "biz_123",
+  "totalSent": 10000,
+  "totalDelivered": 9800,
+  "totalOpened": 4500,
+  "totalClicked": 1200,
+  "totalBounced": 150,
+  "totalFailed": 50,
+  "openRate": 0.45,
+  "clickRate": 0.12,
+  "bounceRate": 0.015
+}
+```
+
+---
+
+## OneSignal Integration
+
+Arky uses OneSignal for push notifications and email delivery.
+
+### Push Notifications
+
+**Setup:**
+
+1. Configure OneSignal App ID in business config
+2. Users opt-in via web push or mobile app
+3. Notifications sent automatically for events
+
+**Events that trigger push:**
+- Order status changes
+- Reservation confirmations
+- Payment receipts
+- Newsletter campaigns
+
+### Email via OneSignal
+
+**Transactional Emails:**
+- Order confirmations
+- Reservation confirmations
+- Password reset
+- User verification
+
+**Marketing Emails:**
+- Newsletter campaigns
+- Promotional offers
+
+---
+
+## Notification Channels
+
+```typescript
+enum NotificationChannel {
+  SYSTEM_EMAIL = 'OneSignal transactional',
+  PUSH = 'OneSignal push',
+  SMS = 'OneSignal SMS',
+  WEBHOOK = 'HTTP webhook',
+}
+```
+
+**Priority:**
+1. Push notification (instant)
+2. Email (backup if push disabled)
+3. SMS (opt-in only)
+
+---
+
+## WebSocket Real-time
+
+For real-time notifications in your app, use WebSocket connection:
+
+```typescript
+// Connect to WebSocket
+const ws = new WebSocket('wss://api.arky.io/ws');
+
+ws.onopen = () => {
+  // Authenticate
+  ws.send(JSON.stringify({
+    type: 'AUTH',
+    token: 'YOUR_ACCESS_TOKEN',
+  }));
+};
+
+ws.onmessage = (event) => {
+  const notification = JSON.parse(event.data);
+  
+  // Display notification in UI
+  showNotification(notification.title, notification.body);
+};
+```
+
+**Real-time Events:**
+- New notification received
+- Order status updated
+- Reservation status updated
+- Payment completed
+
+---
+
+## Best Practices
+
+### 1. Request Permission Early
+
+```typescript
+// Request notification permission
+if ('Notification' in window) {
+  Notification.requestPermission().then((permission) => {
+    if (permission === 'granted') {
+      // Initialize OneSignal
+      initOneSignal();
+    }
+  });
+}
+```
+
+### 2. Batch Mark as Seen
+
+Don't mark individual notifications; batch update:
+
+```typescript
+// Good: Mark all as seen at once
+await sdk.notification.updateNotifications({ seen: true });
+
+// Bad: Individual API calls
+// notifications.forEach(n => markAsSeen(n.id));
+```
+
+### 3. Poll for New Notifications
+
+For apps without WebSocket, poll periodically:
+
+```typescript
+// Poll every 30 seconds
+setInterval(async () => {
+  const notifications = await sdk.notification.getNotifications({ limit: 10 });
+  const unread = notifications.filter(n => !n.seen);
+  if (unread.length > 0) {
+    updateUI(unread);
+  }
+}, 30000);
+```
+
+---
+
+## Related
+
+- **[CMS API: Newsletters](/api/cms/#newsletters)**: Newsletter subscriptions and sending
+- **[Business API](/api/business/)**: OneSignal configuration

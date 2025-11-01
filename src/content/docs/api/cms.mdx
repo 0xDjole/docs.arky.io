@@ -1,0 +1,843 @@
+---
+title: CMS API
+description: Headless content management with collections and entries
+head: []
+---
+
+import Tabs from '../../../components/Tabs.svelte';
+
+Manage structured content with collections and entries. Arky's CMS uses a flexible blocks-based system for dynamic content modeling.
+
+## Base URL
+
+All CMS endpoints are prefixed with `/v1/businesses/{businessId}`.
+
+## Authentication
+
+Requires `Authorization: Bearer <access_token>` header with appropriate permissions.
+
+---
+
+## Collections
+
+Collections are content types (like "Blog Posts", "Products", "Pages"). They define the structure and blocks schema.
+
+### Create Collection
+
+**Endpoint:** `POST /v1/businesses/{businessId}/collections`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const collection = await sdk.cms.createCollection({
+  name: 'Blog Posts',
+  slug: 'blog-posts',
+  description: 'Articles and blog content',
+  blocks: [
+    {
+      id: 'title',
+      type: 'TEXT',
+      label: 'Title',
+      required: true,
+      settings: { maxLength: 200 },
+    },
+    {
+      id: 'content',
+      type: 'TEXT',
+      label: 'Content',
+      required: true,
+      settings: { variant: 'HTML' },
+    },
+    {
+      id: 'author',
+      type: 'RELATIONSHIP',
+      label: 'Author',
+      settings: { targetType: 'USER' },
+    },
+    {
+      id: 'published',
+      type: 'BOOLEAN',
+      label: 'Published',
+    },
+  ],
+  statuses: [
+    { id: 'draft', status: 'DRAFT' },
+    { id: 'published', status: 'PUBLISHED' },
+  ],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Blog Posts",
+    "slug": "blog-posts",
+    "description": "Articles and blog content",
+    "blocks": [...],
+    "statuses": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "id": "coll_abc123",
+  "businessId": "biz_123",
+  "name": "Blog Posts",
+  "slug": "blog-posts",
+  "description": "Articles and blog content",
+  "blocks": [...],
+  "statuses": [
+    {
+      "id": "draft",
+      "status": "DRAFT",
+      "changedBy": "SYSTEM",
+      "timestamp": 1698765432
+    }
+  ],
+  "createdAt": 1698765432,
+  "updatedAt": 1698765432
+}
+```
+
+---
+
+### Get Collections
+
+List all collections.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/collections`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.cms.getCollections({
+  limit: 20,
+  cursor: null,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Collection
+
+Fetch a specific collection by ID.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/collections/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const collection = await sdk.cms.getCollection({
+  id: 'coll_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/COLLECTION_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Collection
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/collections/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.cms.updateCollection({
+  id: 'coll_abc123',
+  name: 'Updated Blog Posts',
+  blocks: [...], // Updated schema
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/COLLECTION_ID \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Updated Blog Posts", "blocks": [...] }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Delete Collection
+
+**Endpoint:** `DELETE /v1/businesses/{businessId}/collections/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.cms.deleteCollection({
+  id: 'coll_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/COLLECTION_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Entries
+
+Entries are individual content items (like a specific blog post) that belong to a collection.
+
+### Owner Model
+
+Entries use an `owner` field to specify their parent:
+- `collection:{collectionId}` - Entry belongs to a collection
+- `order:{orderId}` - Entry belongs to an order
+- `reservation:{reservationId}` - Entry belongs to a reservation
+
+The SDK automatically converts `collectionId` to `owner: "collection:{collectionId}"`.
+
+---
+
+### Create Entry
+
+**Endpoint:** `POST /v1/businesses/{businessId}/entries`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const entry = await sdk.cms.createCollectionEntry({
+  collectionId: 'coll_abc123', // Converted to owner: "collection:coll_abc123"
+  locale: 'en',
+  blocks: [
+    {
+      id: 'title',
+      type: 'TEXT',
+      value: 'My First Blog Post',
+    },
+    {
+      id: 'content',
+      type: 'TEXT',
+      value: { en: '<p>This is the content...</p>' },
+    },
+    {
+      id: 'author',
+      type: 'RELATIONSHIP',
+      value: 'user_xyz',
+    },
+    {
+      id: 'published',
+      type: 'BOOLEAN',
+      value: true,
+    },
+  ],
+  statuses: [
+    {
+      id: 'status_1',
+      status: 'PUBLISHED',
+      changedBy: 'USER',
+      userId: 'user_xyz',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "owner": "collection:coll_abc123",
+    "locale": "en",
+    "blocks": [...],
+    "statuses": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Entries
+
+List entries (optionally filtered by collection).
+
+**Endpoint:** `GET /v1/businesses/{businessId}/entries`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.cms.getCollectionEntries({
+  collectionId: 'coll_abc123', // Optional: filter by collection
+  limit: 20,
+  cursor: null,
+});
+
+// Or get all entries across collections:
+const allEntries = await sdk.cms.getCollectionEntries({
+  limit: 50,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# Filter by collection
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries?owner=collection:COLLECTION_ID&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# All entries
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries?limit=50" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Entry
+
+Fetch a specific entry by ID.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/entries/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const entry = await sdk.cms.getCollectionEntry({
+  id: 'entry_abc123',
+});
+
+console.log('Blocks:', entry.blocks);
+console.log('Owner:', entry.owner); // e.g., "collection:coll_abc123"
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries/ENTRY_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Entry
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/entries/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.cms.updateCollectionEntry({
+  id: 'entry_abc123',
+  collectionId: 'coll_abc123',
+  locale: 'en',
+  blocks: [
+    {
+      id: 'title',
+      type: 'TEXT',
+      value: 'Updated Title',
+    },
+    // ... other blocks
+  ],
+  statuses: [...],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries/ENTRY_ID \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "owner": "collection:coll_abc123",
+    "locale": "en",
+    "blocks": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Delete Entry
+
+**Endpoint:** `DELETE /v1/businesses/{businessId}/entries/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.cms.deleteCollectionEntry({
+  id: 'entry_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries/ENTRY_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## AI Block Generation
+
+Generate block content using AI.
+
+**Endpoint:** `POST /v1/businesses/{businessId}/collections/blocks/generate`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const generated = await sdk.cms.generateBlocks({
+  prompt: 'Write a blog post about TypeScript best practices',
+  blocks: [
+    { id: 'title', type: 'TEXT' },
+    { id: 'content', type: 'TEXT', settings: { variant: 'HTML' } },
+    { id: 'tags', type: 'TEXT' },
+  ],
+});
+
+console.log('Generated blocks:', generated.blocks);
+// Use in createCollectionEntry
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/blocks/generate \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Write a blog post about TypeScript best practices",
+    "blocks": [
+      { "id": "title", "type": "TEXT" },
+      { "id": "content", "type": "TEXT", "settings": { "variant": "HTML" } }
+    ]
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "blocks": [
+    {
+      "id": "title",
+      "type": "TEXT",
+      "value": "10 TypeScript Best Practices for 2024"
+    },
+    {
+      "id": "content",
+      "type": "TEXT",
+      "value": { "en": "<p>TypeScript has become...</p>" }
+    }
+  ]
+}
+```
+
+---
+
+## Newsletters
+
+Newsletters are Collections with `type: 'NEWSLETTER'`. They support subscriber management, paid plans, and email sending.
+
+### Create Newsletter Collection
+
+Create a collection with newsletter-specific settings:
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const newsletter = await sdk.cms.createCollection({
+  name: 'Weekly Tech Digest',
+  slug: 'weekly-tech',
+  type: 'NEWSLETTER',
+  description: 'Weekly technology news and insights',
+  plans: [
+    {
+      id: 'plan_free',
+      name: 'Free Edition',
+      description: 'Basic weekly digest',
+      price: {
+        amount: 0,
+        currency: 'usd',
+        interval: 'MONTHLY',
+      },
+      features: ['Weekly newsletter', 'Archive access'],
+    },
+    {
+      id: 'plan_premium',
+      name: 'Premium',
+      description: 'Full access with exclusive content',
+      price: {
+        amount: 999, // $9.99
+        currency: 'usd',
+        interval: 'MONTHLY',
+      },
+      features: ['Daily newsletter', 'Exclusive content', 'Archive access', 'Ad-free'],
+    },
+  ],
+  blocks: [
+    {
+      id: 'subject',
+      type: 'TEXT',
+      label: 'Email Subject',
+      required: true,
+    },
+    {
+      id: 'content',
+      type: 'TEXT',
+      label: 'Content',
+      required: true,
+      settings: { variant: 'HTML' },
+    },
+  ],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Weekly Tech Digest",
+    "slug": "weekly-tech",
+    "type": "NEWSLETTER",
+    "plans": [...],
+    "blocks": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Subscribe to Newsletter
+
+Subscribe a user to a newsletter with a specific plan.
+
+**Endpoint:** `POST /v1/businesses/{businessId}/collections/{collectionId}/subscribe`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// Free newsletter subscription
+const subscription = await sdk.cms.subscribeToCollection({
+  collectionId: 'coll_newsletter_123',
+  email: 'user@example.com',
+  planId: 'plan_free', // Required - must exist in collection.plans
+});
+
+// Paid newsletter subscription (returns Stripe checkout URL)
+const { checkoutUrl } = await sdk.cms.subscribeToCollection({
+  collectionId: 'coll_newsletter_123',
+  email: 'user@example.com',
+  planId: 'plan_premium',
+});
+
+// Redirect user to checkoutUrl to complete payment
+window.location.href = checkoutUrl;
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/COLLECTION_ID/subscribe \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "COLLECTION_ID",
+    "email": "user@example.com",
+    "market": "us",
+    "plan_id": "plan_free"
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Request Body:**
+- `id` (string, required): Collection ID
+- `email` (string, required): Subscriber email
+- `market` (string, required): Market code (e.g., "us", "uk")
+- `plan_id` (string, required): Plan ID from collection.plans
+
+**Response (Free Plan):**
+```json
+{
+  "id": "sub_abc123",
+  "entity": "collection:coll_newsletter_123",
+  "email": "user@example.com",
+  "planId": "plan_free",
+  "status": "ACTIVE",
+  "createdAt": 1698765432
+}
+```
+
+**Response (Paid Plan):**
+```json
+{
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_..."
+}
+```
+
+---
+
+### Get Newsletter Subscribers
+
+List all subscribers to a newsletter.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/collections/{id}/subscribers`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.cms.getCollectionSubscribers({
+  id: 'coll_newsletter_123',
+  limit: 50,
+  cursor: null,
+});
+
+items.forEach(sub => {
+  console.log(`${sub.email} - Plan: ${sub.planId} - Status: ${sub.status}`);
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/COLLECTION_ID/subscribers?limit=50" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": "sub_abc123",
+      "entity": "collection:coll_newsletter_123",
+      "email": "user@example.com",
+      "planId": "plan_free",
+      "status": "ACTIVE",
+      "createdAt": 1698765432,
+      "updatedAt": 1698765432
+    }
+  ],
+  "cursor": "next_page_token"
+}
+```
+
+---
+
+### Unsubscribe from Newsletter
+
+Unsubscribe using a token (typically sent in newsletter emails).
+
+**Endpoint:** `POST /v1/businesses/{businessId}/collections/unsubscribe`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.cms.unsubscribeFromCollection({
+  token: 'unsubscribe_token_from_email',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/unsubscribe \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "unsubscribe_token_from_email"
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Send Newsletter Entry
+
+Send an entry as a newsletter email to all subscribers.
+
+**Endpoint:** `POST /v1/businesses/{businessId}/entries/{entryId}/send`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// Send immediately
+await sdk.cms.sendEntry({
+  entryId: 'entry_abc123',
+});
+
+// Schedule for later
+await sdk.cms.sendEntry({
+  entryId: 'entry_abc123',
+  scheduledAt: Math.floor(Date.now() / 1000) + 3600, // Send in 1 hour
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries/ENTRY_ID/send \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "businessId": "YOUR_BUSINESS_ID",
+    "entryId": "ENTRY_ID",
+    "scheduledAt": 1698765432
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Note:** Entry must belong to a newsletter collection with `owner: "collection:{newsletterId}"`.
+
+---
+
+## Variable Metadata
+
+Get available variables for entry templates.
+
+**Endpoint:** `GET /v1/collections/entry-types/{entryType}/variables`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const metadata = await sdk.cms.getVariableMetadata({
+  entryType: 'NEWSLETTER',
+});
+
+console.log('Available variables:', metadata.variables);
+// e.g., {{ subscriber.name }}, {{ unsubscribe_url }}
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/collections/entry-types/NEWSLETTER/variables \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Block Types
+
+Common block types available:
+
+- `TEXT`: Text content (use `variant: "HTML"` for rich content)
+- `NUMBER`: Numeric values
+- `BOOLEAN`: True/false
+- `DATE`: Timestamp
+- `RELATIONSHIP`: Reference to another entity (user, product, etc.)
+- `GEO_LOCATION`: Latitude/longitude
+- `MEDIA`: Image/video references
+- `SELECT`: Single selection from options
+- `MULTI_SELECT`: Multiple selections
+
+See **[Blocks Guide](/guides/blocks/)** for detailed documentation.
+
+---
+
+## Related
+
+- **[Core Concepts: CMS](/core-concepts/#cms)**
+- **[Blocks System Guide](/guides/blocks/)**
+- **[SDK Usage Guide](/guides/sdk/)**: Learn how to use the SDK

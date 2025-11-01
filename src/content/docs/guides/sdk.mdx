@@ -1,0 +1,815 @@
+---
+title: SDK Usage Guide
+description: Complete guide to using the Arky SDK in React, Vue, Svelte, Astro, and vanilla JavaScript
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **Arky SDK** (`arky-sdk`) is a TypeScript client library that simplifies integration with Arky's APIs. It handles authentication, token refresh, API key management, and provides typed interfaces for all endpoints.
+
+## Installation
+
+<Tabs>
+  <TabItem label="npm">
+```bash
+npm install arky-sdk
+```
+  </TabItem>
+  <TabItem label="pnpm">
+```bash
+pnpm add arky-sdk
+```
+  </TabItem>
+  <TabItem label="yarn">
+```bash
+yarn add arky-sdk
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## Creating the SDK Instance
+
+### Configuration
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  storageUrl: 'https://storage.arky.io/prod',
+  businessId: 'your_business_id',
+  market: 'us',
+  getToken: async () => {
+    // Return stored tokens (from localStorage, cookies, etc.)
+    return {
+      accessToken: localStorage.getItem('accessToken') || '',
+      refreshToken: localStorage.getItem('refreshToken') || '',
+      provider: localStorage.getItem('provider') || 'GUEST',
+      expiresAt: parseInt(localStorage.getItem('expiresAt') || '0'),
+    };
+  },
+  setToken: (tokens) => {
+    // Store tokens securely
+    localStorage.setItem('accessToken', tokens.accessToken);
+    if (tokens.refreshToken) {
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+    }
+    if (tokens.provider) {
+      localStorage.setItem('provider', tokens.provider);
+    }
+    if (tokens.expiresAt) {
+      localStorage.setItem('expiresAt', tokens.expiresAt.toString());
+    }
+  },
+  logout: () => {
+    // Clear tokens on logout
+    localStorage.clear();
+    window.location.href = '/login';
+  },
+  autoGuest: true, // Automatically create guest token if none exists
+  notify: (opts) => {
+    // Optional: Show toast notifications
+    alert(`${opts.type.toUpperCase()}: ${opts.message}`);
+  },
+  isAuthenticated: () => {
+    return !!localStorage.getItem('accessToken');
+  },
+});
+```
+
+### Config Options
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `baseUrl` | `string` | ✅ | — | API base URL (e.g., `https://api.arky.io`) |
+| `storageUrl` | `string` | ❌ | `https://storage.arky.io/dev` | CDN base URL for media files |
+| `businessId` | `string` | ✅ | — | Your business ID |
+| `market` | `string` | ✅ | — | Market/zone code (e.g., `us`, `eu`, `global`) |
+| `getToken` | `() => Promise<AuthTokens>` | ✅ | — | Function to retrieve stored tokens |
+| `setToken` | `(tokens) => void` | ✅ | — | Function to persist tokens |
+| `logout` | `() => void` | ✅ | — | Function to clear auth and redirect |
+| `autoGuest` | `boolean` | ❌ | `true` | Auto-create guest token on init |
+| `notify` | `(opts) => void` | ❌ | — | Toast/notification callback |
+| `isAuthenticated` | `() => boolean` | ❌ | `() => false` | Check if user is authenticated |
+
+---
+
+## Authentication Flows
+
+### Guest Tokens (Anonymous Users)
+
+If `autoGuest: true` (default), the SDK automatically creates a **guest token** on initialization if no tokens exist.
+
+```typescript
+const sdk = createArkySDK({
+  // ... config
+  autoGuest: true, // Guest token created automatically
+});
+
+// No manual login needed for browsing products, CMS content, etc.
+const products = await sdk.eshop.products.list({ page: 1, limit: 20 });
+```
+
+### Email + Password Login
+
+```typescript
+const result = await sdk.user.login({
+  email: 'user@example.com',
+  password: 'secure_password',
+  provider: 'EMAIL',
+});
+
+// Tokens are automatically stored via setToken()
+console.log(result.user); // User object
+```
+
+### OAuth (Google)
+
+```typescript
+// Redirect user to Google OAuth
+window.location.href = `https://api.arky.io/v1/users/oauth/google?businessId=your_business_id&redirectUrl=${encodeURIComponent(window.location.origin + '/auth/callback')}`;
+
+// On callback page, extract code from query params
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
+
+if (code) {
+  const result = await sdk.user.loginWithOAuth({
+    provider: 'GOOGLE',
+    code,
+  });
+  // Tokens stored, user logged in
+}
+```
+
+### Refresh Token Flow
+
+The SDK **automatically refreshes tokens** when the access token expires (using `expiresAt` timestamp).
+
+```typescript
+// No manual refresh needed — SDK handles it internally
+const profile = await sdk.user.getProfile(); // Automatically refreshes if expired
+```
+
+### Logout
+
+```typescript
+// Clear tokens and redirect (via logout callback)
+sdk.logout();
+```
+
+---
+
+## API Modules
+
+The SDK is organized into domain-specific modules:
+
+```typescript
+sdk.user          // User auth, profile, phone verification
+sdk.business      // Business CRUD, subscriptions, invitations
+sdk.media         // File upload, media library
+sdk.role          // Role/permission management
+sdk.notification  // Notifications, email tracking
+sdk.promoCode     // Promo codes CRUD
+sdk.analytics     // Metrics query, health check
+sdk.cms           // Collections, entries, AI blocks, newsletter subscriptions
+sdk.eshop         // Products, orders, checkout
+sdk.reservation   // Services, providers, reservations
+sdk.payment       // Quote engine, markets, Stripe webhooks
+```
+
+---
+
+## Common SDK Usage
+
+### Fetching CMS Content
+
+<Tabs>
+  <TabItem label="TypeScript">
+```typescript
+// List collections
+const collections = await sdk.cms.collections.list({
+  page: 1,
+  limit: 50,
+});
+
+// Get a collection
+const collection = await sdk.cms.collections.get('collection_id');
+
+// List entries
+const entries = await sdk.cms.entries.list('collection_id', {
+  page: 1,
+  limit: 20,
+  hydrate: true, // Hydrate relationships
+});
+
+// Get single entry
+const entry = await sdk.cms.entries.get('collection_id', 'entry_id', {
+  hydrate: true,
+});
+```
+  </TabItem>
+</Tabs>
+
+### E-shop Operations
+
+<Tabs>
+  <TabItem label="TypeScript">
+```typescript
+// List products
+const products = await sdk.eshop.products.list({
+  page: 1,
+  limit: 20,
+  search: 'laptop',
+  categoryId: 'cat_123',
+});
+
+// Get product with pricing
+const product = await sdk.eshop.products.get('prod_123');
+
+// Create order (checkout)
+const order = await sdk.eshop.orders.create({
+  marketId: 'market_us',
+  parts: [
+    {
+      productId: 'prod_123',
+      quantity: 2,
+      blocks: [], // Optional custom fields
+    },
+  ],
+  blocks: [], // Customer info blocks
+  payment: {
+    provider: 'STRIPE',
+    currency: 'usd',
+    amount: 9999, // In cents
+  },
+});
+
+// List user orders
+const orders = await sdk.eshop.orders.list({ page: 1, limit: 10 });
+```
+  </TabItem>
+</Tabs>
+
+### Reservations
+
+<Tabs>
+  <TabItem label="TypeScript">
+```typescript
+// List services
+const services = await sdk.reservation.services.list({ page: 1, limit: 20 });
+
+// Get available slots
+const slots = await sdk.reservation.slots.getAvailable({
+  serviceId: 'service_123',
+  providerId: 'provider_456',
+  date: '2025-02-01',
+});
+
+// Create reservation
+const reservation = await sdk.reservation.reservations.create({
+  serviceId: 'service_123',
+  providerId: 'provider_456',
+  startTime: 1706803200,
+  endTime: 1706806800,
+  marketId: 'market_us',
+  parts: [{ serviceId: 'service_123', quantity: 1, blocks: [] }],
+  blocks: [], // Customer info
+  payment: {
+    provider: 'STRIPE',
+    currency: 'usd',
+    amount: 5000,
+  },
+});
+```
+  </TabItem>
+</Tabs>
+
+### Media Upload
+
+<Tabs>
+  <TabItem label="TypeScript">
+```typescript
+// Upload file
+const fileInput = document.querySelector('input[type="file"]');
+const file = fileInput.files[0];
+
+const media = await sdk.media.upload(file, {
+  owner: `product:prod_123`,
+  generateResolutions: true, // Generate thumbnails/resolutions
+});
+
+console.log(media.url); // S3 path
+console.log(media.resolutions.thumbnail.url); // CDN thumbnail URL
+
+// Upload from URL
+const mediaFromUrl = await sdk.media.uploadFromUrl({
+  url: 'https://example.com/image.jpg',
+  owner: `entry:entry_123`,
+  generateResolutions: true,
+});
+```
+  </TabItem>
+</Tabs>
+
+### Newsletter Subscription
+
+Newsletters are Collections with `type: 'NEWSLETTER'`. See [CMS API - Newsletters](/api/cms/#newsletters) for full details.
+
+<Tabs>
+  <TabItem label="TypeScript">
+```typescript
+// Subscribe to newsletter (requires planId)
+await sdk.cms.subscribeToCollection({
+  collectionId: 'newsletter_123',
+  email: 'user@example.com',
+  planId: 'plan_free', // Required - specify which plan
+});
+
+// Get subscribers
+const subscribers = await sdk.cms.getCollectionSubscribers({
+  id: 'newsletter_123',
+});
+
+// Unsubscribe via token (from email link)
+await sdk.cms.unsubscribeFromCollection({
+  token: 'unsubscribe_token_xyz',
+});
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## Utility Functions
+
+The SDK includes utility functions for common operations:
+
+### Block Utilities
+
+```typescript
+import { getBlockValue, getBlockTextValue, extractBlockValues } from 'arky-sdk/utils/blocks';
+
+const entry = await sdk.cms.entries.get('posts', 'post_123');
+
+// Extract single block value
+const title = getBlockValue(entry, 'title'); // Returns first value
+
+// Extract localized text
+const description = getBlockTextValue(
+  entry.blocks.find(b => b.key === 'description'),
+  'en'
+);
+
+// Extract all block values as object
+const values = extractBlockValues(entry.blocks);
+// { title: "...", body: "...", featured: true }
+```
+
+See [Blocks Guide](/guides/blocks) for full block utilities documentation.
+
+### Price Utilities
+
+```typescript
+const product = await sdk.eshop.products.get('prod_123');
+
+// Get price for current market
+const price = sdk.utils.getMarketPrice(product.prices, sdk.getMarket());
+console.log(price.currency, price.amount); // 'usd', 2999
+
+// Format price (cents to dollars)
+const formatted = sdk.utils.formatMinor(price.amount, price.currency);
+console.log(formatted); // "$29.99"
+
+// Get currency symbol
+const symbol = sdk.utils.getCurrencySymbol('eur');
+console.log(symbol); // "€"
+```
+
+### Text Utilities
+
+```typescript
+// Slugify (URL-safe strings)
+const slug = sdk.utils.slugify('Hello World! 123');
+console.log(slug); // "hello-world-123"
+
+// Humanize (convert snake_case to Title Case)
+const label = sdk.utils.humanize('product_name');
+console.log(label); // "Product Name"
+
+// Format date
+const formatted = sdk.utils.formatDate(1706803200, 'en-US');
+console.log(formatted); // "Feb 1, 2025"
+```
+
+### Timezone Utilities
+
+```typescript
+// Get timezone groups (for select dropdowns)
+const tzGroups = sdk.utils.tzGroups;
+console.log(tzGroups[0]); // { label: "United States", zones: [...] }
+
+// Find timezone by city/country
+const tz = sdk.utils.findTimeZone('New York');
+console.log(tz); // "America/New_York"
+```
+
+### Validation
+
+```typescript
+// Validate phone number (E.164 format)
+const isValid = sdk.utils.validatePhoneNumber('+12345678901');
+console.log(isValid); // true or false
+```
+
+---
+
+## Framework Integration
+
+### React
+
+<Tabs>
+  <TabItem label="Context Provider">
+```tsx
+// src/contexts/ArkyContext.tsx
+import { createContext, useContext, ReactNode } from 'react';
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: import.meta.env.VITE_API_URL,
+  storageUrl: import.meta.env.VITE_STORAGE_URL,
+  businessId: import.meta.env.VITE_BUSINESS_ID,
+  market: 'us',
+  getToken: async () => {
+    return {
+      accessToken: localStorage.getItem('accessToken') || '',
+      refreshToken: localStorage.getItem('refreshToken') || '',
+      provider: localStorage.getItem('provider') || 'GUEST',
+      expiresAt: parseInt(localStorage.getItem('expiresAt') || '0'),
+    };
+  },
+  setToken: (tokens) => {
+    localStorage.setItem('accessToken', tokens.accessToken);
+    if (tokens.refreshToken) localStorage.setItem('refreshToken', tokens.refreshToken);
+    if (tokens.provider) localStorage.setItem('provider', tokens.provider);
+    if (tokens.expiresAt) localStorage.setItem('expiresAt', tokens.expiresAt.toString());
+  },
+  logout: () => {
+    localStorage.clear();
+    window.location.href = '/login';
+  },
+});
+
+const ArkyContext = createContext(sdk);
+
+export const ArkyProvider = ({ children }: { children: ReactNode }) => (
+  <ArkyContext.Provider value={sdk}>{children}</ArkyContext.Provider>
+);
+
+export const useArky = () => useContext(ArkyContext);
+```
+  </TabItem>
+  <TabItem label="Usage in Component">
+```tsx
+// src/components/ProductList.tsx
+import { useEffect, useState } from 'react';
+import { useArky } from '../contexts/ArkyContext';
+
+export function ProductList() {
+  const sdk = useArky();
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    sdk.eshop.products.list({ page: 1, limit: 20 }).then(setProducts);
+  }, [sdk]);
+
+  return (
+    <div>
+      {products.map((product) => (
+        <div key={product.id}>{product.title}</div>
+      ))}
+    </div>
+  );
+}
+```
+  </TabItem>
+</Tabs>
+
+### Vue 3
+
+<Tabs>
+  <TabItem label="Plugin">
+```typescript
+// src/plugins/arky.ts
+import { createArkySDK } from 'arky-sdk';
+import type { App } from 'vue';
+
+const sdk = createArkySDK({
+  baseUrl: import.meta.env.VITE_API_URL,
+  storageUrl: import.meta.env.VITE_STORAGE_URL,
+  businessId: import.meta.env.VITE_BUSINESS_ID,
+  market: 'us',
+  getToken: async () => ({
+    accessToken: localStorage.getItem('accessToken') || '',
+    refreshToken: localStorage.getItem('refreshToken') || '',
+    provider: localStorage.getItem('provider') || 'GUEST',
+    expiresAt: parseInt(localStorage.getItem('expiresAt') || '0'),
+  }),
+  setToken: (tokens) => {
+    localStorage.setItem('accessToken', tokens.accessToken);
+    if (tokens.refreshToken) localStorage.setItem('refreshToken', tokens.refreshToken);
+  },
+  logout: () => {
+    localStorage.clear();
+    window.location.href = '/login';
+  },
+});
+
+export default {
+  install(app: App) {
+    app.provide('arky', sdk);
+  },
+};
+```
+  </TabItem>
+  <TabItem label="Usage in Component">
+```vue
+<script setup lang="ts">
+import { inject, onMounted, ref } from 'vue';
+
+const sdk = inject('arky');
+const products = ref([]);
+
+onMounted(async () => {
+  products.value = await sdk.eshop.products.list({ page: 1, limit: 20 });
+});
+</script>
+
+<template>
+  <div v-for="product in products" :key="product.id">
+    {{ product.title }}
+  </div>
+</template>
+```
+  </TabItem>
+</Tabs>
+
+### Svelte / SvelteKit
+
+<Tabs>
+  <TabItem label="Store">
+```typescript
+// src/lib/stores/arky.ts
+import { createArkySDK } from 'arky-sdk';
+import { browser } from '$app/environment';
+
+export const sdk = createArkySDK({
+  baseUrl: import.meta.env.VITE_API_URL,
+  storageUrl: import.meta.env.VITE_STORAGE_URL,
+  businessId: import.meta.env.VITE_BUSINESS_ID,
+  market: 'us',
+  getToken: async () => {
+    if (!browser) return { accessToken: '', refreshToken: '', provider: 'GUEST' };
+    return {
+      accessToken: localStorage.getItem('accessToken') || '',
+      refreshToken: localStorage.getItem('refreshToken') || '',
+      provider: localStorage.getItem('provider') || 'GUEST',
+      expiresAt: parseInt(localStorage.getItem('expiresAt') || '0'),
+    };
+  },
+  setToken: (tokens) => {
+    if (!browser) return;
+    localStorage.setItem('accessToken', tokens.accessToken);
+    if (tokens.refreshToken) localStorage.setItem('refreshToken', tokens.refreshToken);
+  },
+  logout: () => {
+    if (!browser) return;
+    localStorage.clear();
+    window.location.href = '/login';
+  },
+});
+```
+  </TabItem>
+  <TabItem label="Usage in Component">
+```svelte
+<script lang="ts">
+  import { sdk } from '$lib/stores/arky';
+  import { onMount } from 'svelte';
+
+  let products = [];
+
+  onMount(async () => {
+    products = await sdk.eshop.products.list({ page: 1, limit: 20 });
+  });
+</script>
+
+{#each products as product}
+  <div>{product.title}</div>
+{/each}
+```
+  </TabItem>
+</Tabs>
+
+### Astro
+
+<Tabs>
+  <TabItem label="Server-Side">
+```astro
+---
+// src/pages/products.astro
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: import.meta.env.API_URL,
+  storageUrl: import.meta.env.STORAGE_URL,
+  businessId: import.meta.env.BUSINESS_ID,
+  market: 'us',
+  getToken: async () => ({
+    accessToken: '', // Use API key for server-side calls
+    provider: 'API',
+  }),
+  setToken: () => {},
+  logout: () => {},
+  autoGuest: false,
+});
+
+const products = await sdk.eshop.products.list({ page: 1, limit: 20 });
+---
+
+<ul>
+  {products.map((product) => (
+    <li>{product.title}</li>
+  ))}
+</ul>
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## API Keys vs. JWT Tokens
+
+### JWT Tokens (User Auth)
+
+- Used for **user-facing apps** (React, Vue, Svelte, mobile)
+- Stored in `localStorage` / cookies
+- Automatically refreshed via `refreshToken`
+- Sent as `Authorization: Bearer <token>` header
+
+### API Keys
+
+- Used for **server-side integrations** (Astro SSR, Node.js backends)
+- Stored securely in `.env` or secrets manager
+- Never expire (rotate manually)
+- Sent as `X-API-Key: <key>` header
+
+**Example: Server-side SDK with API Key**
+
+```typescript
+const sdk = createArkySDK({
+  baseUrl: process.env.API_URL,
+  businessId: process.env.BUSINESS_ID,
+  market: 'us',
+  getToken: async () => ({
+    accessToken: process.env.ARKY_API_KEY,
+    provider: 'API',
+  }),
+  setToken: () => {},
+  logout: () => {},
+  autoGuest: false,
+});
+
+const products = await sdk.eshop.products.list({ page: 1, limit: 50 });
+```
+
+---
+
+## Error Handling
+
+All SDK methods can throw errors with the following structure:
+
+```typescript
+try {
+  const product = await sdk.eshop.products.get('invalid_id');
+} catch (error: any) {
+  console.error('Error name:', error.name); // "ApiError", "NetworkError", "ParseError"
+  console.error('Status code:', error.statusCode); // 404, 401, 500, etc.
+  console.error('Message:', error.message); // Human-readable error
+  console.error('Request ID:', error.requestId); // For debugging with support
+  console.error('Validation errors:', error.validationErrors); // Field-level errors
+}
+```
+
+### Error Types
+
+| Error Name | Description |
+|------------|-------------|
+| `ApiError` | Server returned an error (4xx/5xx) |
+| `NetworkError` | Network failure (timeout, no connection) |
+| `ParseError` | Failed to parse JSON response |
+
+### Validation Errors
+
+When the API returns validation errors (e.g., invalid email format), they're available in `error.validationErrors`:
+
+```typescript
+try {
+  await sdk.user.register({ email: 'invalid', password: '123' });
+} catch (error: any) {
+  console.log(error.validationErrors);
+  // {
+  //   email: ["Invalid email format"],
+  //   password: ["Password must be at least 8 characters"]
+  // }
+}
+```
+
+---
+
+## Best Practices
+
+### Token Storage
+
+- **Browser apps**: Use `localStorage` or `sessionStorage` (simplest, suitable for most cases)
+- **Server apps**: Use environment variables or secrets manager
+- **Mobile apps**: Use secure storage (Keychain, Keystore)
+
+### Market Switching
+
+If your app supports multiple markets/regions:
+
+```typescript
+// Switch market dynamically
+sdk.setMarket('eu');
+
+// Fetch products with new market pricing
+const products = await sdk.eshop.products.list({ page: 1, limit: 20 });
+```
+
+### Multi-Business Apps
+
+If your app serves multiple businesses:
+
+```typescript
+// Switch business dynamically
+sdk.setBusinessId('another_business_id');
+
+// Fetch collections for new business
+const collections = await sdk.cms.collections.list({ page: 1, limit: 50 });
+```
+
+### Pagination
+
+Always handle pagination for large datasets:
+
+```typescript
+let page = 1;
+let allProducts = [];
+let hasMore = true;
+
+while (hasMore) {
+  const products = await sdk.eshop.products.list({ page, limit: 100 });
+  allProducts = [...allProducts, ...products];
+  hasMore = products.length === 100;
+  page++;
+}
+```
+
+### Hydration
+
+Only hydrate relationships when needed (reduces payload size):
+
+```typescript
+// Without hydration (faster, smaller payload)
+const entry = await sdk.cms.entries.get('posts', 'post_123');
+// entry.blocks contains "media:xyz" references
+
+// With hydration (slower, larger payload)
+const entryFull = await sdk.cms.entries.get('posts', 'post_123', { hydrate: true });
+// entry.blocks contains full media objects with resolutions
+```
+
+---
+
+## TypeScript Support
+
+The SDK is fully typed. Import types directly:
+
+```typescript
+import type { Business, Product, Order, Reservation, Entry } from 'arky-sdk';
+
+const product: Product = await sdk.eshop.products.get('prod_123');
+const order: Order = await sdk.eshop.orders.create({ ... });
+```
+
+---
+
+## Related Guides
+
+- [Blocks System](/guides/blocks) — Working with block utilities
+- [Business API](/api/business) — Business management
+- [CMS API](/api/cms) — Content management
+- [E-shop API](/api/eshop) — Products and orders
+- [Reservations API](/api/reservations) — Bookings and services

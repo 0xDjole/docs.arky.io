@@ -1,0 +1,779 @@
+---
+title: Business API
+description: Manage business settings, media, subscriptions, and integrations
+head: []
+---
+
+import Tabs from '../../../components/Tabs.svelte';
+
+The Business API manages your business entity, which serves as the top-level tenant in Arky. Configure markets, zones, payment providers, webhooks, and more.
+
+## Base URL
+
+All Business endpoints are prefixed with `/v1/businesses`.
+
+## Authentication
+
+Most Business endpoints require authentication with `WRITE` or `ADMIN` permissions for the business resource.
+
+**Headers:**
+- `Authorization: Bearer <access_token>` (JWT)
+- OR `X-API-Key: <api_key>` (API key with `provider: 'API'`)
+
+---
+
+## List Businesses
+
+Get all businesses the authenticated user has access to.
+
+**Endpoint:** `GET /v1/businesses`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const businesses = await sdk.business.getBusinesses({});
+console.log('Your businesses:', businesses);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.arky.io/v1/businesses
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+[
+  {
+    "id": "biz_abc123",
+    "name": "My Store",
+    "timezone": "America/New_York",
+    "statuses": [...],
+    "gallery": [...],
+    "configs": { ... }
+  }
+]
+```
+
+---
+
+## Get Business
+
+Fetch a specific business by ID.
+
+**Endpoint:** `GET /v1/businesses/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const business = await sdk.business.getBusiness({});
+// Note: businessId comes from SDK config, no need to pass `id`
+
+console.log('Business name:', business.name);
+console.log('Markets:', business.configs.markets);
+console.log('Timezone:', business.timezone);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "id": "biz_abc123",
+  "name": "My Store",
+  "timezone": "America/New_York",
+  "statuses": [
+    {
+      "id": "status_xyz",
+      "status": "ACTIVE",
+      "changedBy": "USER",
+      "userId": "user_123",
+      "timestamp": 1698765432
+    }
+  ],
+  "gallery": [
+    {
+      "id": "media_456",
+      "url": "https://storage.arky.io/...",
+      "mimeType": "image/jpeg"
+    }
+  ],
+  "configs": {
+    "languages": [{ "code": "en", "isDefault": true }],
+    "markets": [
+      {
+        "id": "US",
+        "currency": "USD",
+        "taxMode": "EXCLUSIVE",
+        "taxBps": 700,
+        "paymentMethods": [{ "method": "CREDIT_CARD" }]
+      }
+    ],
+    "zones": [...],
+    "buildHooks": ["https://api.vercel.com/..."],
+    "webhooks": [...],
+    "orderBlocks": [...],
+    "reservationBlocks": [...],
+    "paymentProvider": { "type": "STRIPE", ... },
+    "aiProvider": { "type": "DEEPSEEK", ... }
+  }
+}
+```
+
+---
+
+## Create Business
+
+Create a new business (requires platform-level permissions or invitation).
+
+**Endpoint:** `POST /v1/businesses`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const newBusiness = await sdk.business.createBusiness({
+  name: 'My New Store',
+  timezone: 'America/Los_Angeles',
+  statuses: [
+    {
+      id: 'init_status',
+      status: 'ACTIVE',
+      changedBy: 'SYSTEM',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+  gallery: [],
+  configs: {
+    languages: [{ code: 'en', isDefault: true }],
+    markets: [
+      {
+        id: 'US',
+        currency: 'USD',
+        taxMode: 'EXCLUSIVE',
+        taxBps: 0,
+        paymentMethods: [{ method: 'CREDIT_CARD' }],
+      },
+    ],
+    zones: [],
+    buildHooks: [],
+    webhooks: [],
+    orderBlocks: [],
+    reservationBlocks: [],
+    emails: {
+      billing: 'billing@example.com',
+      support: 'support@example.com',
+    },
+  },
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My New Store",
+    "timezone": "America/Los_Angeles",
+    "statuses": [{
+      "id": "init",
+      "status": "ACTIVE",
+      "changedBy": "SYSTEM",
+      "timestamp": 1698765432
+    }],
+    "gallery": [],
+    "configs": { ... }
+  }' \
+  https://api.arky.io/v1/businesses
+```
+
+  </div>
+</Tabs>
+
+**Response:** The created `Business` object.
+
+---
+
+## Update Business
+
+Update business configuration.
+
+**Endpoint:** `PUT /v1/businesses/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.business.updateBusiness({
+  id: 'biz_abc123',
+  name: 'Updated Store Name',
+  timezone: 'America/New_York',
+  statuses: business.statuses, // Keep existing
+  gallery: business.gallery,
+  configs: {
+    ...business.configs,
+    buildHooks: [
+      'https://api.vercel.com/v1/integrations/deploy/...',
+    ],
+  },
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ ... updated fields ... }' \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Delete Business
+
+Permanently delete a business and all associated data.
+
+**Endpoint:** `DELETE /v1/businesses/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.business.deleteBusiness({ id: 'biz_abc123' });
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Media Management
+
+### List Business Media
+
+Fetch paginated media library.
+
+**Endpoint:** `GET /v1/businesses/{id}/media?cursor=...&limit=20`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { data: media, cursor } = await sdk.business.getBusinessMedia({
+  id: 'biz_abc123',
+  limit: 20,
+  cursor: null, // or next cursor from previous response
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/media?limit=20"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "id": "media_123",
+      "businessId": "biz_abc",
+      "name": "product-photo.jpg",
+      "mimeType": "image/jpeg",
+      "size": 245678,
+      "resolutions": {
+        "original": { "url": "https://...", "width": 2000, "height": 1500 },
+        "large": { "url": "https://...", "width": 1024, "height": 768 },
+        "medium": { "url": "https://...", "width": 512, "height": 384 },
+        "small": { "url": "https://...", "width": 256, "height": 192 }
+      },
+      "createdAt": 1698765432
+    }
+  ],
+  "cursor": "next_page_cursor_xyz"
+}
+```
+
+### Upload Media
+
+Upload files or fetch from URLs.
+
+**Endpoint:** `POST /v1/businesses/{id}/upload`
+
+**Content-Type:** `multipart/form-data`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// Upload local files
+const media = await sdk.business.uploadBusinessMedia({
+  files: [fileBlob1, fileBlob2], // File objects from input
+  urls: ['https://example.com/image.jpg'], // Fetch and store
+});
+
+console.log('Uploaded:', media.length, 'items');
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# Upload file
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "files=@/path/to/image.jpg" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload
+
+# Or fetch from URL
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "files=https://example.com/image.jpg" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload
+```
+
+  </div>
+</Tabs>
+
+**Response:** Array of created `Media` objects.
+
+### Delete Media
+
+Remove media from business library.
+
+**Endpoint:** `DELETE /v1/businesses/{id}/upload?mediaId=...`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.business.deleteBusinessMedia({
+  id: 'biz_abc123',
+  mediaId: 'media_xyz',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload?mediaId=MEDIA_ID"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Subscriptions
+
+Manage Stripe-based business subscriptions (for platform access, not customer payments).
+
+### Get Subscription Plans
+
+List available subscription tiers.
+
+**Endpoint:** `GET /v1/businesses/plans`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const plans = await sdk.business.getSubscriptionPlans({});
+// Returns array of plans with pricing, features, Stripe price IDs
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/businesses/plans
+```
+
+  </div>
+</Tabs>
+
+### Get Current Subscription
+
+**Endpoint:** `GET /v1/businesses/{businessId}/subscription`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const subscription = await sdk.business.getSubscription('biz_abc123');
+console.log('Plan:', subscription.planId);
+console.log('Status:', subscription.status); // ACTIVE, PAST_DUE, CANCELLED
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/subscription
+```
+
+  </div>
+</Tabs>
+
+### Create or Update Subscription
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/subscription`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const result = await sdk.business.updateSubscription({
+  businessId: 'biz_abc123',
+  planId: 'plan_pro',
+  successUrl: 'https://myapp.com/success',
+  cancelUrl: 'https://myapp.com/cancel',
+});
+
+// If checkout required, redirect to result.checkoutUrl
+if (result.checkoutUrl) {
+  window.location.href = result.checkoutUrl;
+}
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "planId": "plan_pro",
+    "successUrl": "https://myapp.com/success",
+    "cancelUrl": "https://myapp.com/cancel"
+  }' \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/subscription
+```
+
+  </div>
+</Tabs>
+
+### Cancel Subscription
+
+**Endpoint:** `DELETE /v1/businesses/{businessId}/subscription?immediately=false`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.business.cancelSubscription({
+  businessId: 'biz_abc123',
+  immediately: false, // Cancel at period end
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/subscription?immediately=false"
+```
+
+  </div>
+</Tabs>
+
+### Reactivate Subscription
+
+**Endpoint:** `POST /v1/businesses/{businessId}/subscription/reactivate`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.business.reactivateSubscription({ businessId: 'biz_abc123' });
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/subscription/reactivate
+```
+
+  </div>
+</Tabs>
+
+### Create Billing Portal Session
+
+**Endpoint:** `POST /v1/businesses/{businessId}/subscription/portal`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { portalUrl } = await sdk.business.createPortalSession({
+  businessId: 'biz_abc123',
+  returnUrl: 'https://myapp.com/settings',
+});
+
+// Redirect to Stripe billing portal
+window.location.href = portalUrl;
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "returnUrl": "https://myapp.com/settings" }' \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/subscription/portal
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Team Invitations
+
+### Invite User to Business
+
+**Endpoint:** `POST /v1/businesses/{businessId}/invitation`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.business.inviteUser({
+  email: 'colleague@example.com',
+  roleIds: ['role_manager_id'], // Optional: assign roles
+});
+// Invitation email sent with token
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "colleague@example.com",
+    "roleIds": ["role_manager_id"]
+  }' \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/invitation
+```
+
+  </div>
+</Tabs>
+
+### Handle Invitation (Accept/Reject)
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/invitation`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.business.handleInvitation({
+  token: 'invitation_token_from_email',
+  action: 'ACCEPT', // or 'REJECT'
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "TOKEN_FROM_EMAIL",
+    "action": "ACCEPT"
+  }' \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/invitation
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Webhooks & Integrations
+
+### Test Webhook
+
+Send a test payload to a webhook endpoint.
+
+**Endpoint:** `POST /v1/businesses/{businessId}/webhooks/test`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const result = await sdk.business.testWebhook({
+  webhook: {
+    id: 'wh_123',
+    name: 'Order Created Hook',
+    url: 'https://myapp.com/webhooks/orders',
+    events: ['order.created'],
+    headers: { 'X-Custom-Header': 'value' },
+    secret: 'whsec_...',
+    enabled: true,
+  },
+});
+
+console.log('Test result:', result.success);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "wh_123",
+    "name": "Test Webhook",
+    "url": "https://myapp.com/webhook",
+    "events": ["order.created"],
+    "headers": {},
+    "secret": "whsec_...",
+    "enabled": true
+  }' \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/webhooks/test
+```
+
+  </div>
+</Tabs>
+
+### Trigger Build Hooks
+
+Trigger static site rebuilds (e.g., Vercel deploy hooks).
+
+**Endpoint:** `POST /v1/businesses/{id}/trigger-builds`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const results = await sdk.business.triggerBuilds({ id: 'biz_abc123' });
+console.log('Triggered:', results.triggered, 'hooks');
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/trigger-builds
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Provider Schedules
+
+Set working hours for reservation providers across services.
+
+**Endpoint:** `PUT /v1/businesses/{id}/schedules`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.business.setProviderSchedule({
+  id: 'biz_abc123',
+  providerIds: ['provider_1', 'provider_2'],
+  serviceIds: ['service_haircut'],
+  workingTime: {
+    workingDays: [
+      { day: 'monday', workingHours: [{ from: 540, to: 1020 }] },
+      { day: 'tuesday', workingHours: [{ from: 540, to: 1020 }] },
+      // ... other days
+    ],
+    outcastDates: [{ month: 12, day: 25, workingHours: [] }], // Closed Christmas
+    specificDates: [],
+  },
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "providerIds": ["provider_1"],
+    "serviceIds": ["service_haircut"],
+    "workingTime": { ... }
+  }' \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/schedules
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Related
+
+- **[Core Concepts: Businesses](/core-concepts/#businesses)**
+- **[Core Concepts: Markets & Zones](/core-concepts/#markets--zones)**
+- **[Payments API](/api/payments/)**: Quote engine and Stripe integration
+- **[Users API](/api/users/)**: Manage team members and roles

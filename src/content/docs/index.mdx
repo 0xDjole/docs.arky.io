@@ -1,0 +1,98 @@
+---
+title: Welcome to Arky
+description: Complete documentation for the Arky platform - headless CMS, e-commerce, reservations, and newsletters
+template: splash
+head: []
+hero:
+  tagline: All-in-one business platform with headless CMS, e-commerce, reservations, and newsletters. Build modern web experiences with our powerful API and SDK.
+  actions:
+    - text: Get Started
+      link: /introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/0xdjole/arky-sdk
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What is Arky?
+
+Arky is a comprehensive business platform that combines essential tools into one unified API:
+
+<CardGrid>
+  <Card title="Headless CMS" icon="document">
+    Flexible content management with blocks, collections, and multi-language support
+  </Card>
+  <Card title="E-commerce" icon="seti:cart">
+    Complete product catalog, orders, quotes, and multi-currency support
+  </Card>
+  <Card title="Reservations" icon="approve-check">
+    Advanced booking system with provider schedules and availability management
+  </Card>
+  <Card title="Newsletter" icon="email">
+    Subscriber management and email campaigns with template support
+  </Card>
+</CardGrid>
+
+## Quick Start
+
+```typescript
+import { ArkySDK } from 'arky-sdk';
+
+const sdk = new ArkySDK({
+  apiUrl: 'https://api.arky.io',
+  businessId: 'your_business_id',
+  apiKey: 'your_api_key',
+});
+
+// Fetch products
+const products = await sdk.eshop.getProducts({ limit: 10 });
+
+// Create a reservation
+const reservation = await sdk.reservation.createReservation({
+  serviceId: 'service_123',
+  providerId: 'provider_456',
+  startTime: 1698765432,
+  endTime: 1698769032,
+});
+```
+
+## Features
+
+- **🔐 Authentication** - JWT, OAuth2, API keys, and role-based access control
+- **💳 Payments** - Stripe integration with multi-currency support
+- **📊 Analytics** - ClickHouse-powered insights and reporting
+- **🔔 Notifications** - Push notifications via OneSignal
+- **📦 Media Management** - S3-backed storage with automatic image optimization
+- **🌍 Multi-tenancy** - Business isolation with markets and zones
+- **⚡ Real-time** - WebSocket support for live updates
+
+## Architecture
+
+Arky is built with modern, scalable technologies:
+
+- **Backend**: Rust + Axum
+- **Database**: TiKV (distributed transactions)
+- **Search**: Qdrant (vector search)
+- **Cache**: Redis
+- **Analytics**: ClickHouse
+- **Storage**: S3-compatible
+
+## Next Steps
+
+<CardGrid>
+  <Card title="Introduction" icon="open-book">
+    [Learn about core concepts →](/introduction/)
+  </Card>
+  <Card title="Quick Start" icon="rocket">
+    [Get up and running in minutes →](/quick-start/)
+  </Card>
+  <Card title="API Reference" icon="setting">
+    [Explore the complete API →](/api/business/)
+  </Card>
+  <Card title="Guides" icon="puzzle">
+    [Follow step-by-step tutorials →](/guides/blocks/)
+  </Card>
+</CardGrid>

@@ -1,0 +1,405 @@
+---
+title: Error Handling
+description: Understanding Arky API error responses and codes
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+All Arky API errors follow a consistent structure to help you handle failures gracefully.
+
+## Error Response Format
+
+```json
+{
+  "message": "Human-readable error message",
+  "error": "ERROR.CODE",
+  "statusCode": 400,
+  "validationErrors": []
+}
+```
+
+### Fields
+
+- **`message`**: Detailed, human-readable description of the error
+- **`error`**: Machine-readable error code in `DOMAIN.TYPE` format
+- **`statusCode`**: HTTP status code (400, 401, 403, 404, 500, etc.)
+- **`validationErrors`**: Array of field-level validation errors (when applicable)
+
+---
+
+## HTTP Status Codes
+
+| Code | Meaning | When it occurs |
+|------|---------|----------------|
+| `400` | Bad Request | Invalid input, validation failed, business logic error |
+| `401` | Unauthenticated | Missing, invalid, or expired token |
+| `403` | Forbidden | Authenticated but lacks permission for the resource |
+| `404` | Not Found | Resource doesn't exist |
+| `409` | Conflict | Transaction conflict (optimistic locking, concurrent updates) |
+| `500` | Internal Server Error | Unexpected server error |
+
+---
+
+## General Error Codes
+
+These errors can occur across all API endpoints:
+
+### `GENERAL.BAD_REQUEST`
+
+**Status:** 400  
+**Description:** Malformed request or invalid parameters
+
+```json
+{
+  "message": "Bad request: Invalid UUID format",
+  "error": "GENERAL.BAD_REQUEST",
+  "statusCode": 400,
+  "validationErrors": []
+}
+```
+
+### `GENERAL.UNAUTHENTICATED`
+
+**Status:** 401  
+**Description:** No authentication token provided, or token is invalid/expired
+
+```json
+{
+  "message": "Unauthenticated",
+  "error": "GENERAL.UNAUTHENTICATED",
+  "statusCode": 401,
+  "validationErrors": []
+}
+```
+
+**Common causes:**
+- Missing `Authorization` header
+- Expired access token
+- Invalid JWT signature
+- Token refresh needed
+
+### `GENERAL.FORBIDDEN`
+
+**Status:** 403  
+**Description:** Authenticated but insufficient permissions
+
+```json
+{
+  "message": "You are forbidden to access this resource.",
+  "error": "GENERAL.FORBIDDEN",
+  "statusCode": 403,
+  "validationErrors": []
+}
+```
+
+**Common causes:**
+- User doesn't have required role/permission
+- Resource belongs to different business
+- API key lacks necessary scopes
+
+### `GENERAL.NOT_FOUND`
+
+**Status:** 404  
+**Description:** Requested resource doesn't exist
+
+```json
+{
+  "message": "Not found",
+  "error": "GENERAL.NOT_FOUND",
+  "statusCode": 404,
+  "validationErrors": []
+}
+```
+
+### `GENERAL.VALIDATION_FAILED`
+
+**Status:** 400  
+**Description:** Request validation failed (field-level errors)
+
+```json
+{
+  "message": "Validation failed",
+  "error": "GENERAL.VALIDATION_FAILED",
+  "statusCode": 400,
+  "validationErrors": [
+    {
+      "field": "email",
+      "message": "Invalid email format"
+    },
+    {
+      "field": "password",
+      "message": "Password must be at least 8 characters"
+    }
+  ]
+}
+```
+
+### `GENERAL.INTERNAL_SERVER`
+
+**Status:** 500  
+**Description:** Unexpected server error
+
+```json
+{
+  "message": "Internal server Error: Database connection failed",
+  "error": "GENERAL.INTERNAL_SERVER",
+  "statusCode": 500,
+  "validationErrors": []
+}
+```
+
+---
+
+## Domain-Specific Error Codes
+
+### User Errors (`USER.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `USER.NOT_FOUND` | 400 | User not found |
+| `USER.EMAIL_EXISTS` | 400 | Email already registered |
+| `USER.PASSWORD_WRONG` | 400 | Incorrect password |
+| `USER.PASSWORD_REQUIRED` | 400 | Password field missing |
+| `USER.PASSWORD_INVALID` | 400 | Password doesn't meet requirements |
+| `USER.INVALID_ORIGIN_URI` | 400 | OAuth origin not whitelisted |
+| `USER.INVALID_REDIRECT_URI` | 400 | OAuth redirect not whitelisted |
+| `USER.FAILED_OAUTH_LOGIN` | 400 | OAuth login failed |
+| `USER.FAILED_REFRESH_ACCESS_TOKEN` | 400 | Token refresh failed |
+| `USER.UNAUTHORIZED` | 403 | User not authorized for this action |
+
+**Example:**
+
+```json
+{
+  "message": "UserError: email already exists",
+  "error": "USER.EMAIL_EXISTS",
+  "statusCode": 400,
+  "validationErrors": []
+}
+```
+
+### Business Errors (`BUSINESS.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `BUSINESS.NOT_FOUND` | 400 | Business not found |
+| `BUSINESS.NAME_REQUIRED` | 400 | Business name is required |
+| `BUSINESS.ALREADY_MEMBER` | 400 | User is already a member |
+| `BUSINESS.INVITATION_PENDING` | 400 | Invitation already sent |
+| `BUSINESS.FAILED_CREATE` | 400 | Failed to create business |
+| `BUSINESS.FAILED_UPDATE` | 400 | Failed to update business |
+| `BUSINESS.FAILED_DELETE` | 400 | Failed to delete business |
+
+### Reservation Errors (`RESERVATION.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `RESERVATION.NOT_FOUND` | 400 | Reservation not found |
+| `RESERVATION.TIME_SLOT_NOT_AVAILABLE` | 409 | Time slot already booked |
+| `RESERVATION.OUTSIDE_WORKING_HOURS` | 400 | Booking outside provider schedule |
+| `RESERVATION.INVALID_TIME_RANGE` | 400 | Invalid start/end time |
+| `RESERVATION.FAILED_CREATE` | 400 | Failed to create reservation |
+
+**Example:**
+
+```json
+{
+  "message": "ReservationError: Time slot not available",
+  "error": "RESERVATION.TIME_SLOT_NOT_AVAILABLE",
+  "statusCode": 409,
+  "validationErrors": []
+}
+```
+
+### Product Errors (`PRODUCT.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `PRODUCT.NOT_FOUND` | 400 | Product not found |
+| `PRODUCT.INSUFFICIENT_STOCK` | 400 | Not enough inventory |
+| `PRODUCT.FAILED_CREATE` | 400 | Failed to create product |
+| `PRODUCT.FAILED_UPDATE` | 400 | Failed to update product |
+
+### Order Errors (`ORDER.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `ORDER.NOT_FOUND` | 400 | Order not found |
+| `ORDER.INVALID_STATUS` | 400 | Invalid order status transition |
+| `ORDER.PAYMENT_FAILED` | 400 | Payment processing failed |
+| `ORDER.FAILED_CREATE` | 400 | Failed to create order |
+
+### Payment Errors (`PAYMENT.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `PAYMENT.STRIPE_ERROR` | 400 | Stripe API error |
+| `PAYMENT.INVALID_AMOUNT` | 400 | Payment amount mismatch |
+| `PAYMENT.PROMO_CODE_INVALID` | 400 | Invalid or expired promo code |
+| `PAYMENT.PROMO_CODE_LIMIT_REACHED` | 400 | Promo code usage limit exceeded |
+
+### Media Errors (`MEDIA.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `MEDIA.NOT_FOUND` | 400 | Media file not found |
+| `MEDIA.UPLOAD_FAILED` | 400 | File upload failed |
+| `MEDIA.INVALID_FILE_TYPE` | 400 | Unsupported file format |
+| `MEDIA.FILE_TOO_LARGE` | 413 | File exceeds size limit |
+
+### CMS Errors (`COLLECTION.*`, `FIELD.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `COLLECTION.NOT_FOUND` | 400 | Collection not found |
+| `COLLECTION.FAILED_CREATE` | 400 | Failed to create collection |
+| `FIELD.VALIDATION_FAILED` | 400 | Block validation failed |
+| `FIELD.REQUIRED_MISSING` | 400 | Required block missing |
+| `FIELD.TYPE_MISMATCH` | 400 | Block value type mismatch |
+
+### Newsletter Errors (`NEWSLETTER.*`)
+
+| Error Code | Status | Description |
+|------------|--------|-------------|
+| `NEWSLETTER.NOT_FOUND` | 400 | Newsletter not found |
+| `NEWSLETTER.ALREADY_SUBSCRIBED` | 400 | Email already subscribed |
+| `NEWSLETTER.NOT_SUBSCRIBED` | 400 | Email not subscribed |
+| `NEWSLETTER.PAYMENT_REQUIRED` | 400 | Paid newsletter requires payment |
+
+---
+
+## Handling Errors in SDK
+
+The SDK automatically parses error responses and throws structured errors:
+
+<Tabs>
+  <TabItem label="TypeScript">
+```typescript
+try {
+  const user = await sdk.user.register({
+    email: 'invalid-email',
+    password: '123',
+  });
+} catch (error: any) {
+  // Access error details
+  console.error('Error code:', error.name); // "ApiError"
+  console.error('Status code:', error.statusCode); // 400
+  console.error('Error type:', error.error); // "GENERAL.VALIDATION_FAILED"
+  console.error('Message:', error.message); // "Validation failed"
+  
+  // Handle validation errors
+  if (error.validationErrors?.length > 0) {
+    error.validationErrors.forEach((err) => {
+      console.error(`${err.field}: ${err.message}`);
+    });
+  }
+  
+  // Handle specific error codes
+  if (error.error === 'USER.EMAIL_EXISTS') {
+    alert('This email is already registered. Please log in instead.');
+  }
+}
+```
+  </TabItem>
+  <TabItem label="HTTP (curl)">
+```bash
+# HTTP errors return JSON with error structure
+curl -X POST https://api.arky.io/v1/users/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "invalid", "password": "123"}'
+
+# Response (HTTP 400):
+# {
+#   "message": "Validation failed",
+#   "error": "GENERAL.VALIDATION_FAILED",
+#   "statusCode": 400,
+#   "validationErrors": [
+#     {"field": "email", "message": "Invalid email format"},
+#     {"field": "password", "message": "Password must be at least 8 characters"}
+#   ]
+# }
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## Best Practices
+
+### 1. Always Check Error Codes
+
+Don't rely solely on status codes—use the `error` field for precise handling:
+
+```typescript
+try {
+  await sdk.reservation.create({ /* ... */ });
+} catch (error: any) {
+  if (error.statusCode === 409) {
+    if (error.error === 'RESERVATION.TIME_SLOT_NOT_AVAILABLE') {
+      // Show time slot picker again
+      refreshAvailableSlots();
+    }
+  }
+}
+```
+
+### 2. Display User-Friendly Messages
+
+The `message` field is server-generated; consider translating error codes to localized messages:
+
+```typescript
+const ERROR_MESSAGES = {
+  'USER.EMAIL_EXISTS': 'This email is already registered.',
+  'USER.PASSWORD_WRONG': 'Incorrect password. Please try again.',
+  'RESERVATION.TIME_SLOT_NOT_AVAILABLE': 'This time slot is no longer available.',
+};
+
+function getUserMessage(error: any): string {
+  return ERROR_MESSAGES[error.error] || 'An error occurred. Please try again.';
+}
+```
+
+### 3. Retry on Transient Errors
+
+Implement retry logic for 500 errors and transaction conflicts:
+
+```typescript
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (error.statusCode === 500 || error.statusCode === 409) {
+        if (i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2 ** i * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+### 4. Log Request IDs for Debugging
+
+Error responses include `x-request-id` header for support:
+
+```typescript
+try {
+  await sdk.eshop.products.create({ /* ... */ });
+} catch (error: any) {
+  console.error('Request ID:', error.requestId); // Use when contacting support
+  console.error('Error:', error.error);
+}
+```
+
+---
+
+## Related
+
+- [Troubleshooting & FAQ](/guides/troubleshooting/) — Common issues and solutions
+- [SDK Usage](/guides/sdk/) — Error handling in SDK
+- [Authentication](/api/users/#error-responses) — Auth-specific errors
+

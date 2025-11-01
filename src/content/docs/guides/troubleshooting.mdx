@@ -1,0 +1,683 @@
+---
+title: Troubleshooting & FAQ
+description: Common errors, debugging tips, and frequently asked questions for Arky platform
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+This guide covers common issues, error messages, and debugging strategies for working with the Arky platform.
+
+---
+
+## Authentication Errors
+
+### 401 Unauthorized
+
+**Symptoms:**
+- API returns `401` status code
+- Error message: "Unauthorized" or "Invalid token"
+
+**Causes & Solutions:**
+
+<Tabs>
+  <TabItem label="Expired Token">
+**Problem:** Access token has expired
+
+**Solution:**
+```typescript
+// Ensure expiresAt is set correctly in setToken()
+setToken: (tokens) => {
+  localStorage.setItem('accessToken', tokens.accessToken);
+  localStorage.setItem('refreshToken', tokens.refreshToken);
+  localStorage.setItem('expiresAt', tokens.expiresAt.toString()); // ← Required
+}
+
+// SDK will automatically refresh when expiresAt < now
+```
+  </TabItem>
+  <TabItem label="Missing Refresh Token">
+**Problem:** No refresh token available for auto-refresh
+
+**Solution:**
+```typescript
+// Check if refreshToken is stored
+const tokens = await sdk.getToken();
+if (!tokens.refreshToken) {
+  // Re-login required
+  sdk.logout();
+}
+```
+  </TabItem>
+  <TabItem label="Wrong Provider">
+**Problem:** Using API key with Bearer auth (or vice versa)
+
+**Solution:**
+```typescript
+// For API keys, set provider to 'API'
+getToken: async () => ({
+  accessToken: process.env.ARKY_API_KEY,
+  provider: 'API', // ← Sends X-API-Key header instead of Bearer
+}),
+```
+  </TabItem>
+  <TabItem label="CORS Preflight">
+**Problem:** Browser blocks request due to missing `Authorization` header in CORS preflight
+
+**Solution:**
+Server CORS config must include:
+```
+Access-Control-Allow-Headers: Authorization, Content-Type, X-API-Key
+```
+(Arky's server already handles this; check if using a proxy/CDN)
+  </TabItem>
+</Tabs>
+
+---
+
+## CORS Errors
+
+### "Access-Control-Allow-Origin" Missing
+
+**Symptoms:**
+- Browser console: "CORS policy blocked request"
+- Network tab shows preflight `OPTIONS` request failing
+
+**Causes & Solutions:**
+
+1. **Wrong `baseUrl` in SDK config**
+   ```typescript
+   // ❌ Wrong (uses local dev server)
+   baseUrl: 'http://localhost:8000'
+   
+   // ✅ Correct (uses production API)
+   baseUrl: 'https://api.arky.io'
+   ```
+
+2. **Custom headers without CORS support**
+   ```typescript
+   // ❌ Custom header may trigger CORS preflight
+   const result = await sdk.httpClient.get('/v1/products', {
+     headers: { 'X-Custom-Header': 'value' }
+   });
+   
+   // ✅ Use standard headers only
+   const result = await sdk.eshop.products.list({ page: 1 });
+   ```
+
+3. **Proxy misconfiguration** (Vite, Webpack, Next.js)
+   ```typescript
+   // vite.config.ts - Proxy API during development
+   export default defineConfig({
+     server: {
+       proxy: {
+         '/api': {
+           target: 'https://api.arky.io',
+           changeOrigin: true,
+           rewrite: (path) => path.replace(/^\/api/, ''),
+         },
+       },
+     },
+   });
+   ```
+
+---
+
+## Payment & Checkout Errors
+
+### 400 Bad Request: "Invalid payment amount"
+
+**Symptoms:**
+- Checkout fails with validation error on `payment.amount`
+
+**Causes:**
+- Amount doesn't match quote total (tax + shipping + subtotal - discounts)
+
+**Solution:**
+```typescript
+// 1. Get quote first
+const quote = await sdk.payment.getQuote({
+  marketId: 'market_us',
+  parts: [{ productId: 'prod_123', quantity: 2 }],
+  promoCode: 'SAVE10',
+});
+
+// 2. Use quote.total as payment amount
+const order = await sdk.eshop.orders.create({
+  marketId: 'market_us',
+  parts: [{ productId: 'prod_123', quantity: 2, blocks: [] }],
+  blocks: [],
+  payment: {
+    provider: 'STRIPE',
+    currency: quote.currency,
+    amount: quote.total, // ← Must match quote
+  },
+});
+```
+
+### Stripe Payment Failed
+
+**Symptoms:**
+- Order created but payment status is `FAILED`
+
+**Causes:**
+1. Stripe webhook not configured
+2. Card declined
+3. Stripe API key mismatch (test vs. prod)
+
+**Solution:**
+```bash
+# Check Stripe webhook logs
+# Ensure webhook URL is configured: https://api.arky.io/v1/payments/stripe/webhook
+
+# Test webhook locally with Stripe CLI
+stripe listen --forward-to localhost:8000/v1/payments/stripe/webhook
+```
+
+---
+
+## Media Upload Errors
+
+### 413 Payload Too Large
+
+**Symptoms:**
+- Upload fails for large files (>10MB)
+
+**Causes:**
+- File exceeds server limits
+
+**Solution:**
+```typescript
+// Compress images before upload
+import imageCompression from 'browser-image-compression';
+
+const file = document.querySelector('input[type="file"]').files[0];
+
+const options = {
+  maxSizeMB: 5,
+  maxWidthOrHeight: 1920,
+};
+
+const compressedFile = await imageCompression(file, options);
+const media = await sdk.media.upload(compressedFile, {
+  owner: 'product:prod_123',
+  generateResolutions: true,
+});
+```
+
+### 400 Bad Request: "Unsupported file type"
+
+**Symptoms:**
+- Upload rejected with file type error
+
+**Supported Formats:**
+- **Images**: JPG, PNG, WebP, SVG, GIF
+- **Videos**: MP4, WebM
+- **Documents**: PDF
+
+**Solution:**
+```typescript
+// Validate file type before upload
+const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+
+if (!allowedTypes.includes(file.type)) {
+  alert('Please upload a JPG, PNG, WebP, or SVG file');
+  return;
+}
+
+const media = await sdk.media.upload(file, { owner: 'entry:123' });
+```
+
+---
+
+## CMS & Blocks Errors
+
+### 400 Bad Request: "Block validation failed"
+
+**Symptoms:**
+- Entry create/update fails with block-specific errors
+
+**Common Causes:**
+
+<Tabs>
+  <TabItem label="Required Field Missing">
+```json
+{
+  "message": "Block validation failed",
+  "validationErrors": {
+    "blocks.title": ["Title is required"]
+  }
+}
+```
+
+**Solution:** Ensure all required blocks are included
+```typescript
+await sdk.cms.entries.create('posts', {
+  title: "My Post",
+  blocks: [
+    { key: 'title', value: [{ en: 'My Post' }] }, // ← Required
+    { key: 'body', value: [{ en: 'Content...' }] },
+  ],
+});
+```
+  </TabItem>
+  <TabItem label="Invalid Block Type">
+```json
+{
+  "message": "Block validation failed",
+  "validationErrors": {
+    "blocks.price": ["Expected NUMBER, got TEXT"]
+  }
+}
+```
+
+**Solution:** Match collection schema block types
+```typescript
+// ❌ Wrong type
+{ key: 'price', value: [{ en: '29.99' }] }
+
+// ✅ Correct type
+{ key: 'price', value: [29.99] }
+```
+  </TabItem>
+  <TabItem label="Relationship Not Found">
+```json
+{
+  "message": "Block validation failed",
+  "validationErrors": {
+    "blocks.gallery": ["Media media:invalid_id not found"]
+  }
+}
+```
+
+**Solution:** Verify media/entry exists before referencing
+```typescript
+// Upload media first
+const media = await sdk.media.upload(file, { owner: 'entry:123' });
+
+// Then reference it
+await sdk.cms.entries.create('posts', {
+  title: "Post with Image",
+  blocks: [
+    { key: 'title', value: [{ en: 'Post with Image' }] },
+    { key: 'image', value: [`media:${media.id}`] }, // ← Valid reference
+  ],
+});
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## Reservation Errors
+
+### 409 Conflict: "Time slot not available"
+
+**Symptoms:**
+- Reservation creation fails with conflict error
+
+**Causes:**
+- Slot already booked by another customer
+- Provider schedule conflict
+
+**Solution:**
+```typescript
+// 1. Always fetch fresh availability
+const slots = await sdk.reservation.slots.getAvailable({
+  serviceId: 'service_123',
+  providerId: 'provider_456',
+  date: '2025-02-01',
+});
+
+// 2. Check slot availability before booking
+const selectedSlot = slots.find(s => s.startTime === desiredStartTime);
+if (!selectedSlot || !selectedSlot.available) {
+  alert('This time slot is no longer available');
+  return;
+}
+
+// 3. Book immediately
+const reservation = await sdk.reservation.reservations.create({
+  serviceId: 'service_123',
+  providerId: 'provider_456',
+  startTime: selectedSlot.startTime,
+  endTime: selectedSlot.endTime,
+  // ...
+});
+```
+
+### 400 Bad Request: "Reservation outside working hours"
+
+**Symptoms:**
+- Booking fails even though slot appears available
+
+**Causes:**
+- Provider's working schedule updated after fetching slots
+- Holiday/break period
+
+**Solution:**
+```typescript
+// Check provider working schedule
+const provider = await sdk.reservation.providers.get('provider_456');
+console.log(provider.workingSchedule);
+
+// Ensure reservation time matches working hours
+// Server validates against current schedule, not cached slots
+```
+
+---
+
+## Transaction Errors (TiKV)
+
+### 409 Conflict: "Transaction conflict"
+
+**Symptoms:**
+- Concurrent updates fail with conflict error
+
+**Causes:**
+- Optimistic locking detected concurrent modification
+- Retry needed
+
+**Solution:**
+The server automatically retries most operations. If error persists:
+
+```typescript
+// Implement exponential backoff retry
+async function withRetry(fn, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error.statusCode === 409 && i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2 ** i * 1000));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+// Usage
+const product = await withRetry(() => 
+  sdk.eshop.products.update('prod_123', { title: 'New Title' })
+);
+```
+
+---
+
+## Search & Filtering Errors
+
+### Empty Results Despite Data Existing
+
+**Symptoms:**
+- Search query returns no results
+- Known entries not appearing
+
+**Causes:**
+1. **Search index not updated** (Qdrant)
+2. **Incorrect search params**
+
+**Solutions:**
+
+```typescript
+// 1. Use exact ID lookup instead of search
+const product = await sdk.eshop.products.get('prod_123'); // ✅ Works
+
+// 2. Check search query syntax
+const products = await sdk.eshop.products.list({
+  search: 'laptop',      // ✅ Simple keyword
+  // search: '*laptop*', // ❌ Wildcards not supported
+});
+
+// 3. Use filters instead of search
+const products = await sdk.eshop.products.list({
+  categoryId: 'cat_electronics',
+  marketId: 'market_us',
+});
+```
+
+---
+
+## Performance Issues
+
+### Slow API Responses
+
+**Causes & Solutions:**
+
+<Tabs>
+  <TabItem label="Hydration Overhead">
+**Problem:** Fetching entries with `hydrate=true` is slow
+
+**Solution:**
+```typescript
+// ❌ Slow (hydrates all relationships)
+const entries = await sdk.cms.entries.list('posts', { 
+  page: 1, 
+  limit: 100,
+  hydrate: true 
+});
+
+// ✅ Fast (dehydrated references)
+const entries = await sdk.cms.entries.list('posts', { 
+  page: 1, 
+  limit: 100 
+});
+
+// Hydrate only when displaying single entry
+const entry = await sdk.cms.entries.get('posts', 'post_123', { hydrate: true });
+```
+  </TabItem>
+  <TabItem label="Large Page Size">
+**Problem:** Requesting too many items per page
+
+**Solution:**
+```typescript
+// ❌ Slow (1000 items)
+const products = await sdk.eshop.products.list({ page: 1, limit: 1000 });
+
+// ✅ Fast (50 items)
+const products = await sdk.eshop.products.list({ page: 1, limit: 50 });
+```
+  </TabItem>
+  <TabItem label="N+1 Queries">
+**Problem:** Fetching related data in a loop
+
+**Solution:**
+```typescript
+// ❌ Slow (N+1 queries)
+for (const product of products) {
+  const category = await sdk.cms.entries.get('categories', product.categoryId);
+}
+
+// ✅ Fast (batch fetch with hydration)
+const products = await sdk.eshop.products.list({ 
+  page: 1, 
+  limit: 20,
+  hydrate: true // Categories hydrated in single query
+});
+```
+  </TabItem>
+</Tabs>
+
+---
+
+## Rate Limiting
+
+### 429 Too Many Requests
+
+**Symptoms:**
+- API returns `429` status code
+- Header: `Retry-After: 60`
+
+**Causes:**
+- Exceeded rate limits (varies by endpoint)
+
+**Solution:**
+```typescript
+// Implement rate limit handling
+async function apiCall() {
+  try {
+    return await sdk.eshop.products.list({ page: 1, limit: 20 });
+  } catch (error) {
+    if (error.statusCode === 429) {
+      const retryAfter = error.headers?.['retry-after'] || 60;
+      console.log(`Rate limited. Retrying after ${retryAfter}s`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      return apiCall(); // Retry
+    }
+    throw error;
+  }
+}
+```
+
+**Best Practices:**
+- Cache responses when possible
+- Use pagination instead of fetching all items
+- Implement exponential backoff for retries
+
+---
+
+## Frequently Asked Questions
+
+### How do I handle multilingual content?
+
+All TEXT blocks support multilingual values:
+
+```typescript
+// Creating multilingual entry
+await sdk.cms.entries.create('posts', {
+  title: "My Post",
+  blocks: [
+    {
+      key: 'title',
+      value: [
+        { en: 'Hello World', es: 'Hola Mundo', fr: 'Bonjour Monde' }
+      ]
+    }
+  ],
+});
+
+// Extracting localized text
+const title = sdk.utils.getBlockTextValue(
+  entry.blocks.find(b => b.key === 'title'),
+  'es' // Locale
+);
+```
+
+### Can I use Arky without the SDK?
+
+Yes, the SDK is optional. You can call the REST API directly:
+
+```bash
+curl -X GET https://api.arky.io/v1/eshop/products \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json"
+```
+
+See individual API docs for endpoint details.
+
+### How do I test webhooks locally?
+
+Use tools like **ngrok** or **Stripe CLI** to forward webhooks:
+
+```bash
+# Stripe CLI
+stripe listen --forward-to localhost:8000/v1/payments/stripe/webhook
+
+# ngrok
+ngrok http 8000
+# Use ngrok URL in webhook settings
+```
+
+### Can I customize email templates?
+
+Yes, via CMS email templates:
+
+1. Create collection with type `EMAIL_TEMPLATES`
+2. Add entry with HTML blocks and variables
+3. Reference template in notifications/newsletters
+
+See [CMS API - Newsletters](/api/cms/#newsletters) for details.
+
+### How do I migrate data between environments?
+
+Use the API to export/import:
+
+```typescript
+// Export from dev
+const products = await devSdk.eshop.products.list({ page: 1, limit: 1000 });
+
+// Import to prod
+for (const product of products) {
+  await prodSdk.eshop.products.create({
+    title: product.title,
+    blocks: product.blocks,
+    prices: product.prices,
+    // ...
+  });
+}
+```
+
+For large datasets, contact support for bulk import tools.
+
+### How do I handle timezone issues?
+
+All timestamps are Unix timestamps (UTC). Convert in client:
+
+```typescript
+const reservation = await sdk.reservation.reservations.get('res_123');
+
+// Convert to user's timezone
+const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const localTime = new Date(reservation.startTime * 1000).toLocaleString('en-US', {
+  timeZone: userTz,
+});
+```
+
+Use SDK timezone utils for dropdowns:
+
+```typescript
+const tzGroups = sdk.utils.tzGroups;
+const userTz = sdk.utils.findTimeZone('New York'); // "America/New_York"
+```
+
+### Can I host my own Arky instance?
+
+Arky is a managed platform (SaaS). Self-hosting is not supported.
+
+For enterprise deployments, contact sales for dedicated instances.
+
+---
+
+## Getting Help
+
+### Debug Information
+
+When reporting issues, include:
+
+1. **Request ID** (from error response headers: `x-request-id`)
+2. **SDK version** (`console.log(SDK_VERSION)` from `arky-sdk`)
+3. **Error message** and stack trace
+4. **Reproduction steps**
+
+### Support Channels
+
+- **Documentation**: [https://docs.arky.io](https://docs.arky.io)
+- **Email**: support@arky.io
+- **GitHub Issues**: (for SDK bugs)
+
+### Server Status
+
+Check server health:
+
+```typescript
+const health = await sdk.analytics.health();
+console.log(health.status); // "healthy" | "degraded" | "down"
+```
+
+---
+
+## Related Guides
+
+- [SDK Usage](/guides/sdk) — SDK setup and configuration
+- [Blocks System](/guides/blocks) — Working with blocks
+- [API Reference](/api/business) — Full API documentation

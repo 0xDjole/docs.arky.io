@@ -1,0 +1,844 @@
+---
+title: Reservations API
+description: Booking system with services, providers, and time slots
+head: []
+---
+
+import Tabs from '../../../components/Tabs.svelte';
+
+Manage your booking system with services, providers, availability, and reservations.
+
+## Base URL
+
+- Services/Providers: `/v1/businesses/{businessId}`
+- Reservations: `/v1/reservations`
+
+## Authentication
+
+Requires `Authorization: Bearer <access_token>` header. Guest tokens can be used for browsing and booking.
+
+---
+
+## Services
+
+Services are bookable offerings (e.g., "Haircut", "Massage", "Consultation").
+
+### Create Service
+
+**Endpoint:** `POST /v1/businesses/{businessId}/services`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const service = await sdk.reservation.createService({
+  name: 'Haircut',
+  slug: 'haircut',
+  description: 'Professional haircut service',
+  duration: 1800, // 30 minutes in seconds
+  pricing: {
+    markets: [
+      {
+        marketId: 'US',
+        currency: 'USD',
+        price: 3500, // $35.00 in cents
+      },
+    ],
+  },
+  providerIds: ['provider_1', 'provider_2'], // Who can perform this service
+  blocks: [], // Optional: custom fields for booking
+  statuses: [
+    {
+      id: 'status_1',
+      status: 'ACTIVE',
+      changedBy: 'USER',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/services \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Haircut",
+    "slug": "haircut",
+    "description": "Professional haircut service",
+    "duration": 1800,
+    "pricing": {...},
+    "providerIds": ["provider_1", "provider_2"],
+    "blocks": [],
+    "statuses": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Services
+
+**Endpoint:** `GET /v1/businesses/{businessId}/services`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.reservation.getServices({
+  limit: 20,
+  cursor: null,
+});
+
+console.log('Services:', items.length);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/services?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Service
+
+**Endpoint:** `GET /v1/businesses/{businessId}/services/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const service = await sdk.reservation.getService({
+  id: 'service_abc123',
+});
+
+console.log('Duration:', service.duration);
+console.log('Providers:', service.providerIds);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/services/SERVICE_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Service
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/services/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.reservation.updateService({
+  id: 'service_abc123',
+  name: 'Premium Haircut',
+  duration: 2700, // 45 minutes
+  pricing: {...},
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/services/SERVICE_ID \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Premium Haircut", "duration": 2700 }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Delete Service
+
+**Endpoint:** `DELETE /v1/businesses/{businessId}/services/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.reservation.deleteService({
+  id: 'service_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/services/SERVICE_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Providers
+
+Providers are individuals/resources that perform services (e.g., stylists, therapists, rooms).
+
+### Create Provider
+
+**Endpoint:** `POST /v1/businesses/{businessId}/providers`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const provider = await sdk.reservation.createProvider({
+  name: 'Jane Smith',
+  slug: 'jane-smith',
+  description: 'Senior stylist with 10 years experience',
+  userId: 'user_xyz', // Optional: link to user account
+  serviceIds: ['service_haircut', 'service_coloring'],
+  statuses: [
+    {
+      id: 'status_1',
+      status: 'ACTIVE',
+      changedBy: 'USER',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/providers \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Smith",
+    "slug": "jane-smith",
+    "description": "Senior stylist",
+    "userId": "user_xyz",
+    "serviceIds": ["service_haircut"],
+    "statuses": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Providers
+
+**Endpoint:** `GET /v1/businesses/{businessId}/providers`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.reservation.getProviders({
+  limit: 20,
+  cursor: null,
+  serviceId: 'service_haircut', // Optional: filter by service
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# All providers
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/providers?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter by service
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/providers?serviceId=SERVICE_ID&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Provider
+
+**Endpoint:** `GET /v1/businesses/{businessId}/providers/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const provider = await sdk.reservation.getProvider({
+  id: 'provider_abc123',
+});
+
+console.log('Services:', provider.serviceIds);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/providers/PROVIDER_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Provider
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/providers/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.reservation.updateProvider({
+  id: 'provider_abc123',
+  name: 'Jane Smith (Senior)',
+  serviceIds: ['service_haircut', 'service_coloring', 'service_styling'],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/providers/PROVIDER_ID \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Jane Smith (Senior)", "serviceIds": [...] }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Delete Provider
+
+**Endpoint:** `DELETE /v1/businesses/{businessId}/providers/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.reservation.deleteProvider({
+  id: 'provider_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/providers/PROVIDER_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Working Time & Schedules
+
+### Get Provider Working Time
+
+Fetch a provider's schedule.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/providers/{providerId}/working-time`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const workingTime = await sdk.reservation.getProviderWorkingTime({
+  providerId: 'provider_abc123',
+  serviceIds: ['service_haircut'], // Optional filter
+});
+
+console.log('Working days:', workingTime.workingDays);
+console.log('Outcast dates:', workingTime.outcastDates); // Holidays, closures
+console.log('Specific dates:', workingTime.specificDates); // Override schedule
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/providers/PROVIDER_ID/working-time?serviceIds=SERVICE_ID" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "workingDays": [
+    {
+      "day": "monday",
+      "workingHours": [
+        { "from": 540, "to": 1020 }
+      ]
+    },
+    {
+      "day": "tuesday",
+      "workingHours": [
+        { "from": 540, "to": 720 },
+        { "from": 780, "to": 1020 }
+      ]
+    }
+  ],
+  "outcastDates": [
+    {
+      "month": 12,
+      "day": 25,
+      "workingHours": []
+    }
+  ],
+  "specificDates": [
+    {
+      "year": 2024,
+      "month": 11,
+      "day": 15,
+      "workingHours": [{ "from": 600, "to": 900 }]
+    }
+  ]
+}
+```
+
+**Time Format:**
+- Times are in minutes from midnight (e.g., 540 = 9:00 AM, 1020 = 5:00 PM)
+
+---
+
+### Set Provider Schedules
+
+Set working hours for one or more providers (see [Business API](/api/business/#provider-schedules)).
+
+---
+
+## Available Slots
+
+Get bookable time slots for a service.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/services/{serviceId}/available-slots`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const slots = await sdk.reservation.getAvailableSlots({
+  serviceId: 'service_haircut',
+  startTime: Math.floor(Date.now() / 1000),
+  endTime: Math.floor(Date.now() / 1000) + 7 * 24 * 3600, // Next 7 days
+  providerId: 'provider_abc123', // Optional: specific provider
+  limit: 1000,
+});
+
+slots.forEach((slot) => {
+  console.log('Provider:', slot.providerId);
+  console.log('Start:', new Date(slot.startTime * 1000));
+  console.log('End:', new Date(slot.endTime * 1000));
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/services/SERVICE_ID/available-slots?startTime=1698765432&endTime=1699370232&limit=1000" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+[
+  {
+    "providerId": "provider_abc123",
+    "serviceId": "service_haircut",
+    "startTime": 1698765432,
+    "endTime": 1698767232
+  },
+  {
+    "providerId": "provider_abc123",
+    "serviceId": "service_haircut",
+    "startTime": 1698767232,
+    "endTime": 1698769032
+  }
+]
+```
+
+---
+
+## Reservations
+
+### Create Reservation
+
+**Endpoint:** `POST /v1/reservations`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const reservation = await sdk.reservation.createReservation({
+  customerId: 'user_xyz',
+  parts: [
+    {
+      id: 'part_1',
+      serviceId: 'service_haircut',
+      providerId: 'provider_abc123',
+      startTime: 1698765432,
+      endTime: 1698767232,
+      price: 3500,
+    },
+  ],
+  blocks: [
+    // Optional: customer notes, preferences
+    {
+      id: 'notes',
+      type: 'TEXT',
+      value: 'Please use scissors only, no clippers',
+    },
+  ],
+  statuses: [
+    {
+      id: 'status_1',
+      status: 'PENDING',
+      changedBy: 'USER',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/reservations \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "businessId": "YOUR_BUSINESS_ID",
+    "market": "US",
+    "customerId": "user_xyz",
+    "parts": [...],
+    "blocks": [...],
+    "statuses": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Reservation
+
+**Endpoint:** `GET /v1/reservations/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const reservation = await sdk.reservation.getReservation({
+  id: 'reservation_abc123',
+});
+
+console.log('Parts:', reservation.parts.length);
+console.log('Total:', reservation.total);
+console.log('Status:', reservation.statuses[reservation.statuses.length - 1].status);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/reservations/RESERVATION_ID?businessId=YOUR_BUSINESS_ID" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Reservation
+
+**Endpoint:** `PUT /v1/reservations/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.reservation.updateReservation({
+  id: 'reservation_abc123',
+  parts: [...], // Updated time slots
+  blocks: [...],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/reservations/RESERVATION_ID \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "parts": [...], "blocks": [...] }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Search Reservations
+
+**Endpoint:** `GET /v1/reservations/search`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.reservation.searchReservations({
+  limit: 20,
+  cursor: null,
+  status: 'CONFIRMED', // Optional filter
+  providerId: 'provider_abc123', // Optional filter
+  startTime: Math.floor(Date.now() / 1000),
+  endTime: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/reservations/search?businessId=YOUR_BUSINESS_ID&status=CONFIRMED&startTime=1698765432&endTime=1699370232&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### My Reservations
+
+Get reservations for the authenticated user.
+
+**Endpoint:** `GET /v1/reservations`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.reservation.searchMyReservations({
+  limit: 20,
+  cursor: null,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/reservations?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Checkout Flow
+
+### Get Quote
+
+Calculate pricing for a reservation.
+
+**Endpoint:** `POST /v1/payments/quote`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const quote = await sdk.reservation.getQuote({
+  currency: 'USD',
+  paymentMethod: 'CREDIT_CARD',
+  parts: [
+    {
+      serviceId: 'service_haircut',
+      providerId: 'provider_abc123',
+      startTime: 1698765432,
+      endTime: 1698767232,
+    },
+  ],
+  promoCode: 'FIRST20', // Optional
+});
+
+console.log('Subtotal:', quote.subtotal);
+console.log('Tax:', quote.tax);
+console.log('Discount:', quote.discount);
+console.log('Total:', quote.total);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/payments/quote \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "businessId": "YOUR_BUSINESS_ID",
+    "market": "US",
+    "currency": "USD",
+    "paymentMethod": "CREDIT_CARD",
+    "lines": [
+      {
+        "type": "SERVICE",
+        "serviceId": "service_haircut",
+        "quantity": 1
+      }
+    ],
+    "promoCode": "FIRST20"
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Checkout
+
+Process payment and create reservation.
+
+**Endpoint:** `POST /v1/reservations/checkout`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const result = await sdk.reservation.checkout({
+  parts: [
+    {
+      serviceId: 'service_haircut',
+      providerId: 'provider_abc123',
+      startTime: 1698765432,
+      endTime: 1698767232,
+    },
+  ],
+  paymentMethod: 'CREDIT_CARD',
+  blocks: [
+    {
+      id: 'notes',
+      type: 'TEXT',
+      value: 'Customer notes...',
+    },
+  ],
+  promoCode: 'FIRST20',
+});
+
+if (result.checkoutUrl) {
+  // Redirect to Stripe checkout
+  window.location.href = result.checkoutUrl;
+} else {
+  // Reservation confirmed
+  console.log('Reservation ID:', result.reservationId);
+}
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/reservations/checkout \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "businessId": "YOUR_BUSINESS_ID",
+    "market": "US",
+    "parts": [...],
+    "paymentMethod": "CREDIT_CARD",
+    "blocks": [...],
+    "promoCode": "FIRST20"
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Reservation Parts
+
+Reservations can have multiple parts (e.g., haircut + coloring). Each part has:
+
+```typescript
+{
+  id: 'part_1',
+  serviceId: 'service_haircut',
+  providerId: 'provider_abc123',
+  startTime: 1698765432, // Unix timestamp
+  endTime: 1698767232,   // Unix timestamp
+  price: 3500,           // cents
+  blocks: [],            // Optional: part-specific data
+}
+```
+
+---
+
+## Reservation Statuses
+
+Common statuses:
+- `PENDING`: Awaiting confirmation
+- `CONFIRMED`: Booked and confirmed
+- `IN_PROGRESS`: Currently happening
+- `COMPLETED`: Finished
+- `CANCELLED`: Cancelled by user or business
+- `NO_SHOW`: Customer didn't show up
+
+---
+
+## Related
+
+- **[Business API: Provider Schedules](/api/business/#provider-schedules)**
+- **[Payments API](/api/payments/)**: Quote engine
+- **[Core Concepts: Reservations](/core-concepts/#reservations)**

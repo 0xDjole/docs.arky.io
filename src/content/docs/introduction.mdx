@@ -1,0 +1,104 @@
+---
+title: Introduction to Arky
+description: All-in-one business platform with headless CMS, e-commerce, reservations, and newsletters
+head: []
+---
+
+# Welcome to Arky
+
+**Arky** is an all-in-one business platform that provides everything you need to build modern web applications with content management, e-commerce, booking/reservations, and newsletter capabilities—all accessible via a unified REST API and TypeScript SDK.
+
+## What is Arky?
+
+Arky combines four core systems into a single, cohesive platform:
+
+- **Headless CMS**: Flexible content management with a unified Blocks system for structured data
+- **E-commerce**: Full-featured online store with products, variants, orders, carts, and checkout
+- **Reservations**: Service booking and appointment scheduling with providers, time slots, and availability management
+- **Newsletters**: Email campaigns with subscriber management and delivery tracking
+
+All of these systems share:
+- **Unified authentication** (JWT, API keys, guest tokens, OAuth via Google)
+- **Flexible pricing** with multi-market and multi-currency support
+- **Blocks-based data model** for forms, custom fields, and dynamic content
+- **Real-time capabilities** via WebSocket notifications
+- **Rich media management** with S3 storage and automatic resolutions
+- **Analytics** via ClickHouse for business insights
+
+## Why Arky?
+
+### 1. **One Platform, Multiple Use Cases**
+
+Instead of stitching together separate services for CMS, e-commerce, bookings, and email—each with different APIs, auth systems, and billing—Arky provides a single, unified API surface.
+
+### 2. **Headless & Framework-Agnostic**
+
+Arky is fully headless. Use it with:
+- **Astro** (as seen in the website example)
+- **React** / **Next.js**
+- **Vue** / **Nuxt**
+- **Svelte** / **SvelteKit**
+- Or any JavaScript/TypeScript framework
+
+### 3. **Blocks System**
+
+A powerful, type-safe field system inspired by modern CMS tools. Define forms, product attributes, reservation metadata, and more using reusable "blocks" (Text, Number, Boolean, Relationship, GeoLocation, etc.).
+
+### 4. **Multi-Market & Multi-Currency**
+
+Built-in support for:
+- **Markets** (e.g., US, EU, UK) with distinct currencies, tax modes, and payment methods
+- **Zones** (geographic groupings) with country-based shipping and tax rules
+- **Market-based pricing** on products and services
+
+### 5. **Built for Scale**
+
+Arky is built for production from day one:
+- **Distributed & highly available** across multiple regions
+- **Fast** with automatic caching and optimized queries
+- **Reliable** with automatic backups and 99.9% uptime SLA
+- **Secure** with SOC 2 compliance and data encryption at rest
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Your Frontend                             │
+│         (Astro, React, Vue, Svelte, Next.js...)             │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         │  TypeScript SDK (arky-sdk)
+                         │  or REST API
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│                      Arky Platform                           │
+│                                                              │
+│   CMS  │  E-commerce  │  Reservations  │  Newsletter       │
+│                                                              │
+│   Auth  │  Payments  │  Media  │  Analytics  │  Search     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Your app connects to Arky via:**
+- **TypeScript SDK** (`arky-sdk`) for frontend apps
+- **REST API** (`api.arky.io`) for any language/framework
+- **Webhooks** for real-time event notifications
+
+## Key Concepts
+
+Before diving into the API reference, familiarize yourself with these core concepts:
+
+- **Business**: Top-level tenant. Each business has its own data, users, roles, and configurations.
+- **Markets & Zones**: Multi-region pricing and tax/shipping rules.
+- **Blocks**: Typed fields for dynamic forms and structured content (think Notion-style blocks).
+- **Collections & Entries**: CMS content is organized into collections (like content types) and entries (like posts/pages).
+- **Products & Variants**: E-commerce catalog with multi-attribute variants and market-based pricing.
+- **Services & Providers**: Reservation system entities (e.g., "Haircut" service with multiple stylists as providers).
+- **Quotes & Checkout**: Unified payment flow across e-shop and reservations with promo codes, shipping, and tax calculation.
+
+## Next Steps
+
+- **[Quick Start](/quick-start/)**: Set up your first Arky project
+- **[Core Concepts](/core-concepts/)**: Deep dive into key abstractions
+- **[API Reference](/api/business/)**: Explore all endpoints
+- **[SDK Usage Guide](/guides/sdk/)**: Learn to use the TypeScript SDK

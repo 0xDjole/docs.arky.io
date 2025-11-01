@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.astro/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cache
+.cache/
+
+# Terraform sensitive files
+deploy/terraform.tfvars
+deploy/terraform.tfstate
+deploy/terraform.tfstate.backup
+deploy/.terraform/
+deploy/.terraform.lock.hcl

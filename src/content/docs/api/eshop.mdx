@@ -1,0 +1,789 @@
+---
+title: E-shop API
+description: Product catalog, orders, and checkout
+head: []
+---
+
+import Tabs from '../../../components/Tabs.svelte';
+
+Manage your e-commerce catalog, process orders, and handle checkout flows.
+
+## Base URL
+
+All E-shop endpoints are prefixed with `/v1/businesses/{businessId}`.
+
+## Authentication
+
+Requires `Authorization: Bearer <access_token>` header. Guest tokens can be used for browsing products and checkout.
+
+---
+
+## Products
+
+### Create Product
+
+**Endpoint:** `POST /v1/businesses/{businessId}/products`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const product = await sdk.eshop.createProduct({
+  name: 'Premium T-Shirt',
+  slug: 'premium-t-shirt',
+  description: 'High-quality cotton t-shirt',
+  category: 'Apparel',
+  gallery: [
+    { id: 'media_123', url: 'https://...', mimeType: 'image/jpeg' },
+  ],
+  variants: [
+    {
+      id: 'variant_small_red',
+      name: 'Small / Red',
+      sku: 'TSHIRT-S-RED',
+      attributes: [
+        { name: 'Size', value: 'S' },
+        { name: 'Color', value: 'Red' },
+      ],
+      pricing: {
+        markets: [
+          {
+            marketId: 'US',
+            currency: 'USD',
+            price: 2999, // $29.99 in cents
+            compareAtPrice: 3999,
+          },
+        ],
+      },
+      inventory: {
+        tracked: true,
+        quantity: 100,
+      },
+    },
+    {
+      id: 'variant_medium_red',
+      name: 'Medium / Red',
+      sku: 'TSHIRT-M-RED',
+      attributes: [
+        { name: 'Size', value: 'M' },
+        { name: 'Color', value: 'Red' },
+      ],
+      pricing: {
+        markets: [
+          {
+            marketId: 'US',
+            currency: 'USD',
+            price: 2999,
+          },
+        ],
+      },
+      inventory: {
+        tracked: true,
+        quantity: 150,
+      },
+    },
+  ],
+  statuses: [
+    {
+      id: 'status_1',
+      status: 'ACTIVE',
+      changedBy: 'USER',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+  blocks: [], // Optional: custom product fields
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Premium T-Shirt",
+    "slug": "premium-t-shirt",
+    "description": "High-quality cotton t-shirt",
+    "category": "Apparel",
+    "gallery": [...],
+    "variants": [...],
+    "statuses": [...],
+    "blocks": []
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "id": "prod_abc123",
+  "businessId": "biz_123",
+  "name": "Premium T-Shirt",
+  "slug": "premium-t-shirt",
+  "description": "High-quality cotton t-shirt",
+  "category": "Apparel",
+  "gallery": [...],
+  "variants": [...],
+  "statuses": [...],
+  "blocks": [],
+  "createdAt": 1698765432,
+  "updatedAt": 1698765432
+}
+```
+
+---
+
+### Get Products
+
+List all products with pagination and filtering.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/products`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.eshop.getProducts({
+  limit: 20,
+  cursor: null,
+  category: 'Apparel', // Optional filter
+});
+
+// Search products
+const results = await sdk.eshop.getProducts({
+  query: 't-shirt',
+  limit: 10,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# List all
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter by category
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products?category=Apparel&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Search
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products?query=t-shirt&limit=10" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Product
+
+Fetch a specific product by ID.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/products/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const product = await sdk.eshop.getProduct({
+  id: 'prod_abc123',
+});
+
+console.log('Variants:', product.variants.length);
+console.log('Price:', product.variants[0].pricing.markets[0].price);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products/PRODUCT_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Product
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/products/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.eshop.updateProduct({
+  id: 'prod_abc123',
+  name: 'Updated T-Shirt Name',
+  variants: [...], // Updated variants
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products/PRODUCT_ID \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Updated Name", "variants": [...] }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Delete Product
+
+**Endpoint:** `DELETE /v1/businesses/{businessId}/products/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.eshop.deleteProduct({
+  id: 'prod_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products/PRODUCT_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+## Orders
+
+### Create Order
+
+Create an order manually (without checkout flow).
+
+**Endpoint:** `POST /v1/businesses/{businessId}/orders`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const order = await sdk.eshop.createOrder({
+  customerId: 'user_xyz',
+  market: 'US',
+  currency: 'USD',
+  lines: [
+    {
+      type: 'PRODUCT_VARIANT',
+      productId: 'prod_abc123',
+      variantId: 'variant_small_red',
+      quantity: 2,
+      unitPrice: 2999,
+      totalPrice: 5998,
+    },
+  ],
+  subtotal: 5998,
+  tax: 420,
+  shipping: 500,
+  total: 6918,
+  statuses: [
+    {
+      id: 'status_1',
+      status: 'PENDING',
+      changedBy: 'USER',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+  paymentStatus: [
+    {
+      id: 'payment_status_1',
+      status: 'PENDING',
+      changedBy: 'USER',
+      timestamp: Date.now() / 1000,
+    },
+  ],
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerId": "user_xyz",
+    "market": "US",
+    "currency": "USD",
+    "lines": [...],
+    "subtotal": 5998,
+    "tax": 420,
+    "shipping": 500,
+    "total": 6918,
+    "statuses": [...],
+    "paymentStatus": [...]
+  }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Orders
+
+List orders with filtering.
+
+**Endpoint:** `GET /v1/businesses/{businessId}/orders`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const { items, cursor } = await sdk.eshop.getOrders({
+  limit: 20,
+  cursor: null,
+  status: 'PENDING', // Optional filter
+  customerId: 'user_xyz', // Optional filter
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# All orders
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter by status
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders?status=PENDING&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter by customer
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders?customerId=user_xyz&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Get Order
+
+**Endpoint:** `GET /v1/businesses/{businessId}/orders/{id}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const order = await sdk.eshop.getOrder({
+  id: 'order_abc123',
+});
+
+console.log('Total:', order.total);
+console.log('Status:', order.statuses[order.statuses.length - 1].status);
+console.log('Payment:', order.paymentStatus[order.paymentStatus.length - 1].status);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders/ORDER_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Order
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/orders/update`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const updated = await sdk.eshop.updateOrder({
+  id: 'order_abc123',
+  lines: [...], // Updated line items
+  subtotal: 6000,
+  total: 7000,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders/update \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "id": "ORDER_ID", "lines": [...] }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+### Update Order Status
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/orders/{id}/status`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.eshop.updateOrderStatus({
+  id: 'order_abc123',
+  status: 'SHIPPED',
+  changedBy: 'USER',
+  userId: 'user_xyz',
+  timestamp: Date.now() / 1000,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders/ORDER_ID/status \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "ORDER_ID",
+    "status": "SHIPPED",
+    "changedBy": "USER",
+    "userId": "user_xyz",
+    "timestamp": 1698765432
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Common Order Statuses:**
+- `PENDING`
+- `PROCESSING`
+- `SHIPPED`
+- `DELIVERED`
+- `CANCELLED`
+- `REFUNDED`
+
+---
+
+### Update Payment Status
+
+**Endpoint:** `PUT /v1/businesses/{businessId}/orders/{id}/payment-status`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.eshop.updateOrderPaymentStatus({
+  id: 'order_abc123',
+  status: 'PAID',
+  changedBy: 'SYSTEM',
+  timestamp: Date.now() / 1000,
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X PUT https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders/ORDER_ID/payment-status \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "ORDER_ID",
+    "status": "PAID",
+    "changedBy": "SYSTEM",
+    "timestamp": 1698765432
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Payment Statuses:**
+- `PENDING`
+- `PAID`
+- `FAILED`
+- `REFUNDED`
+- `PARTIALLY_REFUNDED`
+
+---
+
+## Checkout Flow
+
+### Get Quote
+
+Calculate pricing with tax, shipping, and promo codes.
+
+**Endpoint:** `POST /v1/payments/quote`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const quote = await sdk.eshop.getQuote({
+  currency: 'USD',
+  paymentMethod: 'CREDIT_CARD',
+  items: [
+    {
+      productId: 'prod_abc123',
+      variantId: 'variant_small_red',
+      quantity: 2,
+    },
+  ],
+  shippingMethodId: 'shipping_standard',
+  promoCode: 'SUMMER2024', // Optional
+});
+
+console.log('Subtotal:', quote.subtotal);
+console.log('Tax:', quote.tax);
+console.log('Shipping:', quote.shipping);
+console.log('Discount:', quote.discount);
+console.log('Total:', quote.total);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/payments/quote \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "businessId": "YOUR_BUSINESS_ID",
+    "market": "US",
+    "currency": "USD",
+    "paymentMethod": "CREDIT_CARD",
+    "lines": [
+      {
+        "type": "PRODUCT_VARIANT",
+        "productId": "prod_abc123",
+        "variantId": "variant_small_red",
+        "quantity": 2
+      }
+    ],
+    "shippingMethodId": "shipping_standard",
+    "promoCode": "SUMMER2024"
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "lines": [
+    {
+      "type": "PRODUCT_VARIANT",
+      "productId": "prod_abc123",
+      "variantId": "variant_small_red",
+      "quantity": 2,
+      "unitPrice": 2999,
+      "totalPrice": 5998
+    }
+  ],
+  "subtotal": 5998,
+  "tax": 420,
+  "taxBps": 700,
+  "shipping": 500,
+  "discount": 600,
+  "total": 6318,
+  "currency": "USD"
+}
+```
+
+---
+
+### Checkout
+
+Process payment and create order.
+
+**Endpoint:** `POST /v1/businesses/{businessId}/orders/checkout`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const result = await sdk.eshop.checkout({
+  paymentMethod: 'CREDIT_CARD',
+  shippingMethodId: 'shipping_standard',
+  items: [
+    {
+      productId: 'prod_abc123',
+      variantId: 'variant_small_red',
+      quantity: 2,
+    },
+  ],
+  blocks: [
+    // Optional: shipping address, custom fields
+    {
+      id: 'shipping_address',
+      type: 'TEXT',
+      value: '123 Main St, New York, NY 10001',
+    },
+  ],
+  promoCode: 'SUMMER2024',
+});
+
+if (result.checkoutUrl) {
+  // Redirect to Stripe checkout
+  window.location.href = result.checkoutUrl;
+} else {
+  // Order completed
+  console.log('Order ID:', result.orderId);
+}
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/orders/checkout \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "businessId": "YOUR_BUSINESS_ID",
+    "market": "US",
+    "paymentMethod": "CREDIT_CARD",
+    "shippingMethodId": "shipping_standard",
+    "items": [...],
+    "blocks": [...],
+    "promoCode": "SUMMER2024"
+  }'
+```
+
+  </div>
+</Tabs>
+
+**Response (Stripe):**
+
+```json
+{
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "orderId": "order_abc123"
+}
+```
+
+**Response (Free Order):**
+
+```json
+{
+  "orderId": "order_abc123",
+  "status": "COMPLETED"
+}
+```
+
+---
+
+## Product Variants
+
+Variants represent different configurations of a product (size, color, etc.).
+
+**Structure:**
+
+```typescript
+{
+  id: 'variant_123',
+  name: 'Medium / Blue',
+  sku: 'TSHIRT-M-BLUE',
+  attributes: [
+    { name: 'Size', value: 'M' },
+    { name: 'Color', value: 'Blue' },
+  ],
+  pricing: {
+    markets: [
+      {
+        marketId: 'US',
+        currency: 'USD',
+        price: 2999, // cents
+        compareAtPrice: 3999, // Original price (for sale display)
+      },
+      {
+        marketId: 'EU',
+        currency: 'EUR',
+        price: 2799,
+      },
+    ],
+  },
+  inventory: {
+    tracked: true,
+    quantity: 50,
+    lowStockThreshold: 10,
+  },
+  gallery: [], // Optional: variant-specific images
+}
+```
+
+---
+
+## Inventory Management
+
+Inventory is tracked per variant:
+
+- `tracked: true` - Track stock levels
+- `tracked: false` - Unlimited stock
+- `quantity` - Current stock level
+- `lowStockThreshold` - Alert when stock is low
+
+When an order is placed, inventory is automatically decremented.
+
+---
+
+## Pricing & Markets
+
+Products can have different prices per market:
+
+```typescript
+pricing: {
+  markets: [
+    {
+      marketId: 'US',
+      currency: 'USD',
+      price: 2999,
+    },
+    {
+      marketId: 'EU',
+      currency: 'EUR',
+      price: 2799,
+    },
+  ],
+}
+```
+
+The SDK automatically selects the correct market price based on `apiConfig.market`.
+
+---
+
+## Related
+
+- **[Payments API](/api/payments/)**: Quote engine and Stripe integration
+- **[Core Concepts: Markets](/core-concepts/#markets--zones)**
+- **[Promo Codes](/api/payments/#promo-codes)**

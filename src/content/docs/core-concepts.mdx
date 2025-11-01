@@ -1,0 +1,430 @@
+---
+title: Core Concepts
+description: Understanding the fundamental concepts of the Arky platform
+head: []
+---
+
+# Core Concepts
+
+Before diving into the API, it's important to understand Arky's core abstractions and how they work together.
+
+## Businesses
+
+A **Business** is the top-level tenant in Arky. Every resource (collections, products, services, orders, reservations, etc.) belongs to a business.
+
+### Key Properties
+
+```typescript
+{
+  id: string;
+  name: string;
+  timezone: string; // e.g., "America/New_York"
+  statuses: StatusEvent[]; // Status history
+  gallery: GalleryItem[]; // Business media/branding
+  configs: BusinessConfigs; // Markets, zones, blocks, webhooks, etc.
+}
+```
+
+###
+
+ Business Configs
+
+The `configs` object contains all business-level settings:
+
+- **languages**: Supported locales (e.g., `[{ code: 'en', isDefault: true }]`)
+- **markets**: Price/tax/payment configurations per region
+- **zones**: Geographic shipping and tax rules
+- **buildHooks**: URLs triggered on content changes (for static site rebuilds)
+- **webhooks**: Event listeners for orders, reservations, etc.
+- **orderBlocks**: Custom form fields for checkout
+- **reservationBlocks**: Custom form fields for reservations
+- **paymentProvider**: Stripe configuration
+- **aiProvider**: AI block generation config (Deepseek)
+
+## Markets & Zones
+
+Arky supports multi-region pricing and logistics out of the box.
+
+### Markets
+
+A **Market** defines currency, tax mode, and payment methods for a region:
+
+```typescript
+{
+  id: 'US',
+  currency: 'USD',
+  taxMode: 'EXCLUSIVE', // or 'INCLUSIVE'
+  taxBps: 700, // 7% tax (basis points: 100 = 1%)
+  paymentMethods: [
+    { method: 'CREDIT_CARD' },
+    { method: 'CASH' }
+  ]
+}
+```
+
+**Tax Modes:**
+- `EXCLUSIVE`: Tax is added on top of prices (common in US)
+- `INCLUSIVE`: Tax is included in prices (common in EU)
+
+### Zones
+
+A **Zone** groups countries for shipping and tax purposes:
+
+```typescript
+{
+  id: 'north-america',
+  name: 'North America',
+  countries: ['US', 'CA', 'MX'],
+  taxBps: 800, // 8% zone-level tax
+  shippingMethods: [
+    {
+      id: 'standard',
+      type: 'SHIPPING',
+      prices: [
+        { market: 'US', amount: 500, freeThreshold: 5000 } // $5, free over $50
+      ],
+      taxable: true,
+      etaText: '3-5 business days'
+    },
+    {
+      id: 'pickup',
+      type: 'PICKUP',
+      prices: [{ market: 'US', amount: 0 }],
+      location: { address: '123 Main St, NY', coordinates: { lat: 40.7, lon: -74 } }
+    }
+  ]
+}
+```
+
+**Zone Resolution:**
+- If a country is listed in a zone, that zone's rules apply
+- If `countries: []`, the zone acts as a fallback for all countries
+
+### Pricing
+
+All monetary amounts in Arky are stored in **minor units** (cents):
+- `amount: 1999` = $19.99
+- `amount: 500` = $5.00
+
+Products and services have market-based prices:
+
+```typescript
+{
+  prices: [
+    { market: 'US', amount: 2999 }, // $29.99 in US
+    { market: 'EU', amount: 2799 }, // €27.99 in EU
+    { market: 'UK', amount: 2499 }  // £24.99 in UK
+  ]
+}
+```
+
+## Blocks System
+
+**Blocks** are Arky's universal field system—think Notion-style structured content. They're used everywhere: CMS entries, product attributes, order forms, reservation metadata.
+
+### Block Types
+
+| Type | Description | Example Value |
+|------|-------------|---------------|
+| `Text` | String with optional validation (email, phone, URL, etc.) | `"John Doe"` or `{ en: "Hello", fr: "Bonjour" }` |
+| `Number` | Integer or decimal | `42` or `19.99` |
+| `Boolean` | True/false | `true` |
+| `Relationship` | Reference to media or other entries | `["media:abc123"]` or `["entry:def456"]` |
+| `GeoLocation` | Address + coordinates | `{ address: "123 Main St", coordinates: { lat: 40.7, lon: -74 } }` |
+| `Date` | Timestamp | `1698765432` |
+| `Block` (nested) | Repeatable group of fields | Array of objects with nested blocks |
+
+### Block Structure
+
+```typescript
+{
+  id: string;
+  key: string; // Field name (e.g., "title", "description")
+  type: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'RELATIONSHIP' | 'GEO_LOCATION' | ...;
+  properties: {
+    label?: { en: string; fr: string; ... }; // Localized labels
+    minLength?: number;
+    maxLength?: number;
+    pattern?: string; // Regex for validation
+    variant?: 'EMAIL' | 'PHONE_NUMBER' | 'URL'; // Text variants
+    // ... type-specific properties
+  };
+  value: any[]; // Always an array (for consistency)
+}
+```
+
+### Multilingual Text
+
+Text blocks support localization:
+
+```typescript
+// Simple text
+{ key: 'title', type: 'TEXT', value: ["Hello World"] }
+
+// Multilingual text
+{ key: 'title', type: 'TEXT', value: [{ en: "Hello", fr: "Bonjour" }] }
+```
+
+Use `sdk.utils.getBlockTextValue(block, 'en')` to extract the right locale.
+
+### Hydration & Dehydration
+
+- **Hydration**: Expands relationships (e.g., `"media:abc"` → full media object)
+- **Dehydration**: Reduces to references (for AI processing or storage)
+
+The server auto-hydrates responses; the SDK provides utilities for working with both forms.
+
+## Authentication & Permissions
+
+### Token Types
+
+1. **JWT (Access + Refresh)**
+   - Created via email/password login or OAuth
+   - Access tokens expire (configurable); refresh tokens are long-lived
+   - Used with `Authorization: Bearer <token>` header
+
+2. **API Keys**
+   - For server-to-server integrations
+   - No expiry
+   - Used with `X-API-Key: <key>` header
+   - Set `provider: 'API'` in `getToken()` to signal this mode
+
+3. **Guest Tokens**
+   - Auto-created for unauthenticated users (if `autoGuest: true`)
+   - Limited permissions (read-only for public data)
+
+### Roles & Permissions
+
+Every user can have roles associated with a business. Each role defines permissions:
+
+```typescript
+{
+  id: string;
+  name: string; // e.g., "Business Owner", "Manager", "Member"
+  businessId: string;
+  permissions: [
+    {
+      action: 'ADMIN' | 'WRITE' | 'READ',
+      resource: '/businesses/{businessId}', // Path pattern
+      conditions: [] // Optional conditions (future use)
+    }
+  ]
+}
+```
+
+**Default Roles** (auto-created for new businesses):
+- **Business Owner**: Full admin access
+- **Manager**: Write access to all resources
+- **Member**: Write access to orders and reservations
+- **Viewer**: Read-only access
+
+### Authorization Flow
+
+1. Client includes `Authorization` or `X-API-Key` header
+2. Server extracts user ID and business context
+3. For protected routes, server checks if user's roles grant required permission
+4. If authorized, request proceeds; otherwise, `403 Forbidden`
+
+## Collections & Entries (CMS)
+
+### Collections
+
+A **Collection** is a content type (like "Blog Posts", "Products", "Team Members"):
+
+```typescript
+{
+  id: string;
+  name: string;
+  businessId: string;
+  schema: Block[]; // Field definitions
+}
+```
+
+### Entries
+
+An **Entry** is an instance of a collection (like a specific blog post):
+
+```typescript
+{
+  id: string;
+  owner: string; // Format: "collection:{collectionId}" or custom
+  blocks: Block[]; // Filled-in values matching the collection schema
+  statuses: StatusEvent[]; // DRAFT, PUBLISHED, ARCHIVED
+}
+```
+
+**Owner Model**: Entries can belong to collections or other arbitrary owners (e.g., `"user:abc"`, `"order:xyz"`) for flexible content organization.
+
+## Products & Variants (E-shop)
+
+### Products
+
+A **Product** is a sellable item:
+
+```typescript
+{
+  id: string;
+  name: string;
+  slug: string; // URL-friendly identifier
+  categoryIds: string[];
+  variants: ProductVariant[];
+  gallery: GalleryItem[];
+  statuses: StatusEvent[]; // ACTIVE, INACTIVE, ARCHIVED
+}
+```
+
+### Variants
+
+Each product has one or more **Variants** (size, color, etc.):
+
+```typescript
+{
+  id: string;
+  name: string;
+  sku: string;
+  prices: Price[]; // Market-based pricing
+  attributes: Record<string, string>; // { size: 'M', color: 'Blue' }
+  inventory: number; // Stock level (-1 = unlimited)
+}
+```
+
+### Orders
+
+Orders represent completed purchases:
+
+```typescript
+{
+  id: string;
+  userId: string;
+  businessId: string;
+  items: OrderItem[]; // Product variants + quantities
+  payment: Payment; // Amount, currency, method, Stripe IDs
+  shippingAddress: Location;
+  blocks: Block[]; // Custom checkout fields (from business.configs.orderBlocks)
+  statuses: StatusEvent[]; // INITIATED, CONFIRMED, SHIPPED, COMPLETED, CANCELLED
+}
+```
+
+## Services, Providers & Reservations
+
+### Services
+
+A **Service** is something bookable (e.g., "Haircut", "Massage"):
+
+```typescript
+{
+  id: string;
+  name: string;
+  duration: number; // Minutes
+  prices: Price[]; // Market-based
+  gallery: GalleryItem[];
+}
+```
+
+### Providers
+
+A **Provider** delivers a service (e.g., a stylist, therapist):
+
+```typescript
+{
+  id: string;
+  name: string;
+  serviceIds: string[]; // Services they can provide
+  workingTime: WorkingTime; // Availability schedule
+}
+```
+
+### Working Time
+
+Defines when a provider is available:
+
+```typescript
+{
+  workingDays: [
+    { day: 'monday', workingHours: [{ from: 540, to: 1020 }] } // 9am-5pm (minutes from midnight)
+  ],
+  outcastDates: [
+    { month: 12, day: 25, workingHours: [] } // Closed on Christmas
+  ],
+  specificDates: [
+    { date: 1698796800, workingHours: [{ from: 600, to: 720 }] } // Special hours on a date
+  ]
+}
+```
+
+### Reservations
+
+A **Reservation** is a booked time slot:
+
+```typescript
+{
+  id: string;
+  userId: string;
+  businessId: string;
+  parts: ReservationPart[]; // Can book multiple services/slots at once
+  payment: Payment;
+  blocks: Block[]; // Custom reservation fields (from business.configs.reservationBlocks)
+  statuses: StatusEvent[]; // PENDING, CONFIRMED, COMPLETED, CANCELLED
+}
+```
+
+Each **ReservationPart**:
+
+```typescript
+{
+  serviceId: string;
+  providerId?: string; // Optional (if service allows any provider)
+  from: number; // Unix timestamp
+  to: number; // Unix timestamp
+}
+```
+
+## Payments & Quotes
+
+### Quote Engine
+
+Before checkout, request a **Quote** to calculate totals:
+
+```typescript
+// Request
+{
+  businessId: string;
+  market: string;
+  currency: string;
+  paymentMethod: 'CREDIT_CARD' | 'CASH';
+  lines: [
+    { type: 'PRODUCT_VARIANT', productId: '...', variantId: '...', quantity: 2 },
+    { type: 'SERVICE', serviceId: '...', quantity: 1 }
+  ],
+  shippingMethodId?: string;
+  promoCode?: string;
+}
+
+// Response (Quote)
+{
+  currency: string;
+  market: string;
+  subtotal: number; // Sum of line items (minor units)
+  shipping: number;
+  discount: number; // From promo code
+  tax: number;
+  total: number;
+  lineItems: [ /* breakdown per item */ ],
+  promoCode: { /* validation result */ } | null
+}
+```
+
+### Checkout Flow
+
+1. **Build cart** (client-side or via API)
+2. **Get quote** → `POST /v1/payments/quote`
+3. **Checkout** → `POST /v1/businesses/{id}/orders/checkout` or `/v1/reservations/checkout`
+4. **Stripe handles payment** (if `CREDIT_CARD`), webhook confirms
+5. **Order/Reservation created** with status `CONFIRMED`
+
+## Next Steps
+
+- **[Business API](/api/business/)**: Configure your business
+- **[Blocks Guide](/guides/blocks/)**: Master the blocks system
+- **[Markets Guide](/guides/markets/)**: Set up pricing and shipping
+- **[Authentication Guide](/guides/auth/)**: Implement login flows

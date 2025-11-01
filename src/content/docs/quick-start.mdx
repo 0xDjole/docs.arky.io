@@ -1,0 +1,333 @@
+---
+title: Quick Start
+description: Get started with Arky in minutes
+head: []
+---
+
+import Tabs from '../../components/Tabs.svelte';
+
+# Quick Start
+
+Get your first Arky application running in under 5 minutes.
+
+## Prerequisites
+
+- Node.js 18+ and npm/yarn/pnpm
+- An Arky account and Business ID (sign up at [arky.io](https://arky.io))
+- API access token or use guest mode for public data
+
+## Installation
+
+Install the Arky SDK in your project:
+
+```bash
+npm install arky-sdk
+```
+
+## Initialize the SDK
+
+Create an SDK instance with your configuration:
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'US', // or 'EU', 'UK', etc.
+  storageUrl: 'https://storage.arky.io',
+  
+  // Token management (implement based on your auth strategy)
+  getToken: async () => {
+    // Return stored tokens from localStorage, cookies, or your auth provider
+    const accessToken = localStorage.getItem('accessToken') || '';
+    const refreshToken = localStorage.getItem('refreshToken') || '';
+    return { accessToken, refreshToken };
+  },
+  
+  setToken: (tokens) => {
+    // Persist tokens when received or refreshed
+    localStorage.setItem('accessToken', tokens.accessToken);
+    if (tokens.refreshToken) {
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+    }
+  },
+  
+  logout: () => {
+    // Clear tokens on logout
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+  },
+  
+  // Optional: Auto-create guest token if no auth (default: true)
+  autoGuest: true,
+});
+```
+
+## Make Your First Request
+
+### Fetch Business Information
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// Using the SDK
+const business = await sdk.business.getBusiness({});
+console.log('Business name:', business.name);
+console.log('Markets:', business.configs.markets);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# Using HTTP directly
+curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID
+```
+
+  </div>
+</Tabs>
+
+### Fetch CMS Content
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// Get a collection (e.g., blog posts)
+const collection = await sdk.cms.getCollection({ id: 'blog' });
+
+// Get entries from the collection
+const { data: posts } = await sdk.cms.getCollectionEntries({
+  collectionId: 'blog',
+  limit: 10,
+});
+
+posts.forEach(post => {
+  const title = sdk.utils.getBlockTextValue(
+    post.blocks.find(b => b.key === 'title')
+  );
+  console.log('Post:', title);
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# Get collection
+curl https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/collections/blog
+
+# Get entries
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries?owner=collection:blog&limit=10"
+```
+
+  </div>
+</Tabs>
+
+### Fetch Products
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// List products
+const { data: products } = await sdk.eshop.getProducts({
+  status: 'ACTIVE',
+  limit: 20,
+});
+
+products.forEach(product => {
+  const price = sdk.utils.getMarketPrice(
+    product.variants[0].prices,
+    'US' // market
+  );
+  console.log(`${product.name}: ${price}`);
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+# List products
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products?status=ACTIVE&limit=20"
+```
+
+  </div>
+</Tabs>
+
+## Framework Integration
+
+### React / Next.js
+
+```tsx
+import { createArkySDK } from 'arky-sdk';
+import { useState, useEffect } from 'react';
+
+const sdk = createArkySDK({ /* config */ });
+
+export function ProductList() {
+  const [products, setProducts] = useState([]);
+  
+  useEffect(() => {
+    sdk.eshop.getProducts({ limit: 10 }).then(res => {
+      setProducts(res.data);
+    });
+  }, []);
+  
+  return (
+    <div>
+      {products.map(p => (
+        <div key={p.id}>{p.name}</div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Vue / Nuxt
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue';
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({ /* config */ });
+const products = ref([]);
+
+onMounted(async () => {
+  const res = await sdk.eshop.getProducts({ limit: 10 });
+  products.value = res.data;
+});
+</script>
+
+<template>
+  <div v-for="p in products" :key="p.id">
+    {{ p.name }}
+  </div>
+</template>
+```
+
+### Svelte / SvelteKit
+
+```svelte
+<script>
+  import { createArkySDK } from 'arky-sdk';
+  import { onMount } from 'svelte';
+  
+  const sdk = createArkySDK({ /* config */ });
+  let products = [];
+  
+  onMount(async () => {
+    const res = await sdk.eshop.getProducts({ limit: 10 });
+    products = res.data;
+  });
+</script>
+
+{#each products as p (p.id)}
+  <div>{p.name}</div>
+{/each}
+```
+
+### Astro
+
+```astro
+---
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({ /* config */ });
+const { data: products } = await sdk.eshop.getProducts({ limit: 10 });
+---
+
+{products.map(p => (
+  <div>{p.name}</div>
+))}
+```
+
+## Authentication Strategies
+
+### Guest Mode (Public Data)
+
+Enable `autoGuest: true` (default) to automatically create a guest token for unauthenticated requests:
+
+```typescript
+const sdk = createArkySDK({
+  autoGuest: true,
+  // ... other config
+});
+// Guest token is auto-created on first request
+```
+
+### Email & Password
+
+```typescript
+// Register a new user
+const user = await sdk.user.registerUser({
+  name: 'John Doe',
+  email: 'john@example.com',
+  password: 'securePassword123',
+});
+
+// Login
+const tokens = await sdk.user.loginUser({
+  email: 'john@example.com',
+  password: 'securePassword123',
+  provider: 'EMAIL',
+});
+
+// Store tokens
+sdk.setToken(tokens);
+```
+
+### OAuth (Google)
+
+```typescript
+// Get OAuth URL
+const { url } = await sdk.user.getLoginUrl({
+  provider: 'GOOGLE',
+  originUrl: window.location.origin,
+  redirectUrl: `${window.location.origin}/auth/callback`,
+});
+
+// Redirect user to Google
+window.location.href = url;
+
+// On callback page, exchange code for tokens
+const tokens = await sdk.user.loginUser({
+  provider: 'GOOGLE',
+  code: urlParams.get('code'),
+  originUrl: window.location.origin,
+});
+
+sdk.setToken(tokens);
+```
+
+### API Keys (Server-Side)
+
+For server-side or backend integrations, use API keys:
+
+```typescript
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'US',
+  getToken: async () => ({
+    accessToken: process.env.ARKY_API_KEY,
+    provider: 'API', // Important: signals X-API-Key header usage
+  }),
+  setToken: () => {}, // No-op for API keys
+  logout: () => {},
+  autoGuest: false,
+});
+```
+
+## Next Steps
+
+- **[Core Concepts](/core-concepts/)**: Understand Businesses, Markets, Blocks, and more
+- **[Business API](/api/business/)**: Manage business settings and configuration
+- **[CMS API](/api/cms/)**: Work with collections and entries
+- **[E-shop API](/api/eshop/)**: Build your storefront
+- **[SDK Guide](/guides/sdk/)**: Advanced SDK usage and utilities

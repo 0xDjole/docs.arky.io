@@ -1,0 +1,18 @@
+:root {
+  --sl-color-accent: 99, 102, 241;
+  --sl-color-accent-low: 238, 242, 255;
+  --sl-color-accent-high: 224, 231, 255;
+}
+
+[data-theme='dark'] {
+  --sl-color-accent-low: 17, 24, 39;
+  --sl-color-accent-high: 55, 65, 81;
+}
+
+.sl-markdown-content pre {
+  border-radius: 0.5rem;
+}
+
+.sl-markdown-content code {
+  font-size: 0.9em;
+}

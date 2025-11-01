@@ -1,0 +1,367 @@
+---
+title: Analytics API
+description: ClickHouse-powered business insights and metrics
+head: []
+---
+
+import Tabs from '../../../components/Tabs.svelte';
+
+Query business metrics and analytics powered by ClickHouse for real-time insights.
+
+## Base URL
+
+All Analytics endpoints are prefixed with `/v1/analytics`.
+
+## Authentication
+
+Requires `Authorization: Bearer <access_token>` header with `READ` or `ADMIN` permissions.
+
+---
+
+## Get Analytics
+
+Query metrics with flexible filtering and grouping.
+
+**Endpoint:** `GET /v1/analytics/{businessId}`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const analytics = await sdk.analytics.getAnalytics({
+  startDate: '2024-01-01',
+  endDate: '2024-12-31',
+  metrics: ['revenue', 'orders', 'customers'],
+  groupBy: 'month', // hour, day, week, month, year
+  filters: {
+    market: 'US',
+    productCategory: 'Apparel',
+  },
+});
+
+console.log('Total revenue:', analytics.revenue.total);
+console.log('Total orders:', analytics.orders.total);
+console.log('Avg order value:', analytics.revenue.total / analytics.orders.total);
+console.log('By month:', analytics.timeSeries);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/analytics/YOUR_BUSINESS_ID?startDate=2024-01-01&endDate=2024-12-31&metrics=revenue,orders&groupBy=month" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "businessId": "biz_123",
+  "period": {
+    "startDate": "2024-01-01",
+    "endDate": "2024-12-31"
+  },
+  "metrics": {
+    "revenue": {
+      "total": 125000,
+      "currency": "USD"
+    },
+    "orders": {
+      "total": 850
+    },
+    "customers": {
+      "total": 450,
+      "new": 200,
+      "returning": 250
+    }
+  },
+  "timeSeries": [
+    {
+      "period": "2024-01",
+      "revenue": 8500,
+      "orders": 65,
+      "customers": 42
+    },
+    {
+      "period": "2024-02",
+      "revenue": 11200,
+      "orders": 78,
+      "customers": 51
+    }
+  ]
+}
+```
+
+---
+
+## Available Metrics
+
+### Revenue Metrics
+- `revenue`: Total sales revenue
+- `avgOrderValue`: Average order value
+- `revenueByProduct`: Revenue per product
+- `revenueByMarket`: Revenue per market
+
+### Order Metrics
+- `orders`: Total order count
+- `ordersByStatus`: Orders grouped by status
+- `ordersByPaymentMethod`: Orders per payment method
+
+### Customer Metrics
+- `customers`: Total unique customers
+- `newCustomers`: First-time customers
+- `returningCustomers`: Repeat customers
+- `customerLifetimeValue`: CLV calculation
+
+### Reservation Metrics
+- `reservations`: Total reservation count
+- `reservationsByService`: Bookings per service
+- `reservationsByProvider`: Bookings per provider
+- `avgBookingValue`: Average reservation price
+
+### Product Metrics
+- `topProducts`: Best-selling products
+- `productViews`: Product page views
+- `conversionRate`: View-to-purchase ratio
+
+---
+
+## Group By Options
+
+- `hour`: Hourly breakdown (max 7 days range)
+- `day`: Daily breakdown
+- `week`: Weekly breakdown
+- `month`: Monthly breakdown
+- `year`: Yearly breakdown
+
+---
+
+## Filters
+
+Apply filters to narrow down analytics:
+
+```typescript
+const filtered = await sdk.analytics.getAnalytics({
+  startDate: '2024-01-01',
+  endDate: '2024-12-31',
+  metrics: ['revenue', 'orders'],
+  filters: {
+    market: 'US',
+    paymentMethod: 'CREDIT_CARD',
+    productCategory: 'Electronics',
+    orderStatus: 'COMPLETED',
+    customerType: 'RETURNING',
+  },
+});
+```
+
+---
+
+## Analytics Health
+
+Check ClickHouse connection and data sync status.
+
+**Endpoint:** `GET /v1/analytics/{businessId}/health`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+const health = await sdk.analytics.getAnalyticsHealth({});
+
+console.log('Status:', health.status); // OK, DEGRADED, DOWN
+console.log('Last sync:', new Date(health.lastSyncAt * 1000));
+console.log('Records:', health.recordCount);
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl "https://api.arky.io/v1/analytics/YOUR_BUSINESS_ID/health" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Response:**
+
+```json
+{
+  "status": "OK",
+  "lastSyncAt": 1698765432,
+  "recordCount": 15000,
+  "lag": 5
+}
+```
+
+---
+
+## Setup Analytics (Admin)
+
+Initialize ClickHouse tables for a business (platform admin only).
+
+**Endpoint:** `POST /v1/analytics/admin/setup`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+// Admin only
+await sdk.analytics.setupAnalytics({
+  businessId: 'biz_abc123',
+});
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X POST https://api.arky.io/v1/analytics/admin/setup \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "businessId": "biz_abc123" }'
+```
+
+  </div>
+</Tabs>
+
+---
+
+## ClickHouse Integration
+
+Analytics data is stored in ClickHouse for fast aggregations:
+
+**Tables:**
+- `orders`: Order history
+- `reservations`: Booking history
+- `products`: Product catalog
+- `customers`: Customer profiles
+- `pageviews`: Website analytics
+
+**Data Flow:**
+1. Events occur (order placed, reservation made)
+2. Background worker syncs data to ClickHouse
+3. Analytics API queries ClickHouse
+4. Results cached in Redis (5 min TTL)
+
+**Sync Frequency:** Every 5 minutes (configurable)
+
+---
+
+## Common Queries
+
+### Revenue Dashboard
+
+```typescript
+const dashboard = await sdk.analytics.getAnalytics({
+  startDate: '2024-01-01',
+  endDate: '2024-12-31',
+  metrics: [
+    'revenue',
+    'orders',
+    'avgOrderValue',
+    'topProducts',
+    'revenueByMarket',
+  ],
+  groupBy: 'month',
+});
+```
+
+### Customer Insights
+
+```typescript
+const customers = await sdk.analytics.getAnalytics({
+  startDate: '2024-01-01',
+  endDate: '2024-12-31',
+  metrics: [
+    'customers',
+    'newCustomers',
+    'returningCustomers',
+    'customerLifetimeValue',
+  ],
+  groupBy: 'month',
+});
+```
+
+### Product Performance
+
+```typescript
+const products = await sdk.analytics.getAnalytics({
+  startDate: '2024-01-01',
+  endDate: '2024-12-31',
+  metrics: [
+    'topProducts',
+    'productViews',
+    'conversionRate',
+    'revenueByProduct',
+  ],
+});
+```
+
+---
+
+## Best Practices
+
+### 1. Use Appropriate Time Ranges
+
+```typescript
+// Good: Reasonable ranges
+const lastMonth = await sdk.analytics.getAnalytics({
+  startDate: '2024-11-01',
+  endDate: '2024-11-30',
+  groupBy: 'day',
+});
+
+// Bad: Too large range with fine granularity
+// const allTime = await sdk.analytics.getAnalytics({
+//   startDate: '2020-01-01',
+//   endDate: '2024-12-31',
+//   groupBy: 'hour', // Too many data points!
+// });
+```
+
+### 2. Cache Results
+
+```typescript
+// Cache analytics for dashboard
+const cacheKey = `analytics:${businessId}:${date}`;
+let analytics = cache.get(cacheKey);
+
+if (!analytics) {
+  analytics = await sdk.analytics.getAnalytics({...});
+  cache.set(cacheKey, analytics, 300); // 5 min TTL
+}
+```
+
+### 3. Request Only Needed Metrics
+
+```typescript
+// Good: Specific metrics
+const metrics = ['revenue', 'orders'];
+
+// Bad: All metrics (slower)
+// const metrics = ['revenue', 'orders', 'customers', 'topProducts', ...];
+```
+
+---
+
+## Limitations
+
+- **Max Date Range:** 2 years
+- **Max Data Points:** 1000 (adjust groupBy accordingly)
+- **Rate Limit:** 100 requests/minute per business
+- **Cache TTL:** 5 minutes (recent data may be slightly delayed)
+
+---
+
+## Related
+
+- **[E-shop API](/api/eshop/)**: Order and product data
+- **[Reservations API](/api/reservations/)**: Booking data
+- **[Business API](/api/business/)**: Business configuration
