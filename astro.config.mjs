@@ -9,10 +9,11 @@ export default defineConfig({
       title: 'Arky Docs',
       description: 'All-in-one business platform: Headless CMS, E-commerce, Reservations, and Newsletters',
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/arky-io' },
+        { icon: 'github', label: 'Docs Repository', href: 'https://github.com/0xDjole/docs.arky.io' },
+        { icon: 'github', label: 'SDK Repository', href: 'https://github.com/0xDjole/arky-sdk' },
       ],
       editLink: {
-        baseUrl: 'https://github.com/arky-io/arky/edit/main/docs/',
+        baseUrl: 'https://github.com/0xDjole/docs.arky.io/edit/master/',
       },
       lastUpdated: true,
       pagination: true,
