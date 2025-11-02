@@ -1,7 +1,7 @@
 resource "cloudflare_pages_project" "docs" {
   account_id        = var.CLOUDFLARE_ACCOUNT_ID
   name              = "arky-docs"
-  production_branch = "main"
+  production_branch = "master"
 
   build_config {
     build_command   = "npm run build"
@@ -13,7 +13,7 @@ resource "cloudflare_pages_project" "docs" {
     config {
       owner                         = var.GITHUB_OWNER
       repo_name                     = var.GITHUB_REPO
-      production_branch             = "main"
+      production_branch             = "master"
       pr_comments_enabled           = true
       deployments_enabled           = true
       production_deployment_enabled = true
