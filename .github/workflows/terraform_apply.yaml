@@ -2,7 +2,7 @@ name: Deploy Infrastructure
 
 on:
   push:
-    branches: ["main"]
+    branches: ["master"]
 
 env:
   TF_VAR_ROOT_DOMAIN: ${{ secrets.ROOT_DOMAIN }}
@@ -35,7 +35,7 @@ jobs:
 
       - name: Pull latest changes
         run: |
-          git pull origin main
+          git pull origin master
 
       - name: Terraform Init
         working-directory: ./deploy
@@ -53,4 +53,4 @@ jobs:
         run: |
           git add deploy/terraform.tfstate
           git diff --staged --quiet || git commit -m "Update Terraform state"
-          git push origin main
+          git push origin master
