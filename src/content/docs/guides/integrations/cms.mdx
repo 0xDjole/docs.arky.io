@@ -1,0 +1,402 @@
+---
+title: CMS Content Integration
+description: Fetch and display CMS content with SSR, multilingual support, and blocks
+---
+
+# CMS Content Integration
+
+Learn how to fetch CMS content for blogs, pages, and multilingual websites using Arky's headless CMS.
+
+## What You'll Build
+
+- Server-side content fetching (SSR)
+- Blog listing and detail pages
+- Multilingual content with fallbacks
+- Block value extraction (title, body, images, etc.)
+- CDN media URLs for optimized images
+
+## Prerequisites
+
+- **Token Type**: Server API key for SSR (recommended) or guest token for client-side
+- **Environment**: Works best with SSR frameworks (Astro, Next.js, Nuxt)
+- **CMS Setup**: Collections and entries created in your Arky business
+
+---
+
+## Complete Integration Flow
+
+### 1. SDK Initialization (Server-Side - Recommended)
+
+```typescript
+// In Astro .astro file, Next.js getServerSideProps, etc.
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: process.env.ARKY_BUSINESS_ID,
+  market: 'us',
+  storageUrl: 'https://storage.arky.io',
+  
+  autoGuest: false, // Don't create guest tokens on server
+  
+  getToken: () => ({
+    accessToken: process.env.ARKY_API_KEY, // Server API key
+    provider: 'API',
+    expiresAt: 0,
+  }),
+  
+  setToken: () => {}, // No-op on server
+  logout: () => {},
+});
+```
+
+### 2. Get Collection Metadata
+
+```typescript
+// Fetch collection schema and settings
+const collection = await sdk.cms.getCollection({ id: 'blog' });
+
+console.log(collection.name);        // 'Blog Posts'
+console.log(collection.slug);        // 'blog'
+console.log(collection.blocks);      // Block schema definitions
+console.log(collection.statuses);    // Available statuses
+```
+
+### 3. Fetch Entries (Blog Posts, Pages, etc.)
+
+```typescript
+// Get all entries from a collection
+const { items: posts, cursor } = await sdk.cms.getCollectionEntries({
+  collectionId: 'blog',
+  limit: 20,
+  cursor: null, // For pagination
+});
+
+// Filter by status (if needed)
+const publishedPosts = posts.filter(post => {
+  const status = post.statuses[post.statuses.length - 1]?.status;
+  return status === 'PUBLISHED';
+});
+```
+
+### 4. Extract Block Values
+
+```typescript
+// Use SDK utilities to extract values from blocks
+posts.forEach(post => {
+  // Get text block value (with locale)
+  const title = sdk.utils.getBlockTextValue(
+    post.blocks.find(b => b.key === 'title'),
+    'en' // locale
+  );
+  
+  // Get simple value (non-localized)
+  const published = sdk.utils.getBlockValue(post, 'published');
+  
+  // Get media block
+  const featuredImage = post.blocks.find(b => b.key === 'featured_image');
+  if (featuredImage) {
+    const imageUrl = sdk.utils.getImageUrl(featuredImage);
+    console.log('Image URL:', imageUrl);
+  }
+  
+  console.log('Title:', title);
+  console.log('Published:', published);
+});
+```
+
+### 5. Build CDN URLs for Media
+
+```typescript
+// Media blocks contain references to S3 storage
+const imageBlock = post.blocks.find(b => b.key === 'featured_image');
+
+if (imageBlock?.value?.media) {
+  const media = imageBlock.value.media;
+  
+  // Use different resolutions
+  const thumbnail = media.resolutions?.thumbnail?.url;
+  const medium = media.resolutions?.medium?.url;
+  const original = media.resolutions?.original?.url;
+  
+  // Build full CDN URLs
+  const storageUrl = 'https://storage.arky.io';
+  const thumbnailUrl = thumbnail ? `${storageUrl}/${thumbnail}` : null;
+  
+  console.log('Thumbnail:', thumbnailUrl);
+}
+```
+
+### 6. Single Entry Fetch (Blog Post Detail)
+
+```typescript
+// Get single entry by ID
+const post = await sdk.cms.getCollectionEntry({ id: 'entry_123' });
+
+// Extract all block values at once
+const title = sdk.utils.getBlockTextValue(post.blocks.find(b => b.key === 'title'), 'en');
+const body = sdk.utils.getBlockTextValue(post.blocks.find(b => b.key === 'body'), 'en');
+const author = sdk.utils.getBlockValue(post, 'author'); // Relationship block
+const tags = sdk.utils.getBlockValues(post, 'tags'); // Array of values
+
+console.log({ title, body, author, tags });
+```
+
+---
+
+## Multilingual Content
+
+### Fetch Content by Locale
+
+```typescript
+// CMS blocks can have localized values
+const locale = 'es'; // Spanish
+
+const { items: posts } = await sdk.cms.getCollectionEntries({
+  collectionId: 'blog',
+  limit: 20,
+});
+
+posts.forEach(post => {
+  // Try to get Spanish version, fallback to English
+  const titleES = sdk.utils.getBlockTextValue(
+    post.blocks.find(b => b.key === 'title'),
+    locale
+  );
+  
+  const titleEN = sdk.utils.getBlockTextValue(
+    post.blocks.find(b => b.key === 'title'),
+    'en'
+  );
+  
+  const title = titleES || titleEN; // Fallback pattern
+  console.log('Title:', title);
+});
+```
+
+### Locale Fallback Helper
+
+```typescript
+function getLocalizedValue(block: any, preferredLocale: string, fallbackLocale: string = 'en') {
+  if (!block) return '';
+  
+  const preferred = sdk.utils.getBlockTextValue(block, preferredLocale);
+  if (preferred) return preferred;
+  
+  return sdk.utils.getBlockTextValue(block, fallbackLocale);
+}
+
+// Usage
+const title = getLocalizedValue(
+  post.blocks.find(b => b.key === 'title'),
+  'es',
+  'en'
+);
+```
+
+---
+
+## Complete Astro Example
+
+```astro
+---
+// src/pages/blog/index.astro
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: import.meta.env.ARKY_API_URL,
+  businessId: import.meta.env.ARKY_BUSINESS_ID,
+  market: 'us',
+  storageUrl: import.meta.env.ARKY_STORAGE_URL,
+  autoGuest: false,
+  getToken: () => ({
+    accessToken: import.meta.env.ARKY_API_KEY,
+    provider: 'API',
+    expiresAt: 0,
+  }),
+  setToken: () => {},
+  logout: () => {},
+});
+
+// Fetch blog posts
+const { items: posts } = await sdk.cms.getCollectionEntries({
+  collectionId: 'blog',
+  limit: 20,
+});
+
+// Filter published only
+const publishedPosts = posts.filter(post => {
+  const status = post.statuses[post.statuses.length - 1]?.status;
+  return status === 'PUBLISHED';
+});
+
+// Extract values
+const postsData = publishedPosts.map(post => {
+  const title = sdk.utils.getBlockTextValue(
+    post.blocks.find(b => b.key === 'title'),
+    'en'
+  );
+  
+  const excerpt = sdk.utils.getBlockTextValue(
+    post.blocks.find(b => b.key === 'excerpt'),
+    'en'
+  );
+  
+  const imageBlock = post.blocks.find(b => b.key === 'featured_image');
+  const imagePath = imageBlock?.value?.media?.resolutions?.thumbnail?.url;
+  const imageUrl = imagePath ? `${import.meta.env.ARKY_STORAGE_URL}/${imagePath}` : null;
+  
+  return {
+    id: post.id,
+    title,
+    excerpt,
+    imageUrl,
+    slug: post.slug,
+  };
+});
+---
+
+<div class="blog-grid">
+  {postsData.map(post => (
+    <article class="post-card">
+      {post.imageUrl && (
+        <img src={post.imageUrl} alt={post.title} />
+      )}
+      <h2>{post.title}</h2>
+      <p>{post.excerpt}</p>
+      <a href={`/blog/${post.slug}`}>Read more →</a>
+    </article>
+  ))}
+</div>
+```
+
+---
+
+## Block Types Reference
+
+Common block types you'll encounter:
+
+### TEXT Block
+```typescript
+const textBlock = post.blocks.find(b => b.key === 'title');
+// Localized: { en: 'Hello', es: 'Hola' }
+const value = sdk.utils.getBlockTextValue(textBlock, 'en');
+```
+
+### MEDIA Block
+```typescript
+const imageBlock = post.blocks.find(b => b.key === 'featured_image');
+const imageUrl = sdk.utils.getImageUrl(imageBlock);
+```
+
+### BOOLEAN Block
+```typescript
+const published = sdk.utils.getBlockValue(post, 'is_published'); // true/false
+```
+
+### NUMBER Block
+```typescript
+const views = sdk.utils.getBlockValue(post, 'view_count'); // number
+```
+
+### RELATIONSHIP Block
+```typescript
+const authorId = sdk.utils.getBlockValue(post, 'author'); // 'user_123'
+// Fetch related user if needed
+const author = await sdk.user.getUser({ id: authorId });
+```
+
+### ARRAY Blocks (Tags, Categories)
+```typescript
+const tags = sdk.utils.getBlockValues(post, 'tags'); // ['javascript', 'typescript']
+```
+
+---
+
+## SSR vs CSR Strategy
+
+### Server-Side (Recommended)
+- ✅ SEO-friendly (content in HTML)
+- ✅ Fast initial load
+- ✅ Secure (API keys stay on server)
+- ✅ Use API key token
+
+```typescript
+// Astro, Next.js SSR, SvelteKit load functions
+const sdk = createArkySDK({
+  getToken: () => ({ accessToken: process.env.ARKY_API_KEY, provider: 'API' })
+});
+```
+
+### Client-Side (Not Recommended for Content)
+- ❌ Not SEO-friendly
+- ❌ Slower initial load
+- ✅ Use for dynamic, authenticated content only
+
+```typescript
+// Client-side with guest token
+const sdk = createArkySDK({
+  autoGuest: true,
+  getToken: () => ({ accessToken: localStorage.getItem('token') || '' })
+});
+```
+
+---
+
+## Performance Tips
+
+### Pagination
+```typescript
+let allPosts = [];
+let cursor = null;
+
+do {
+  const { items, cursor: nextCursor } = await sdk.cms.getCollectionEntries({
+    collectionId: 'blog',
+    limit: 100,
+    cursor,
+  });
+  
+  allPosts = [...allPosts, ...items];
+  cursor = nextCursor;
+} while (cursor);
+```
+
+### Caching
+Cache CMS content at build time (SSG) or with short TTLs (ISR):
+
+```typescript
+// Next.js ISR example
+export async function getStaticProps() {
+  const posts = await fetchPosts();
+  
+  return {
+    props: { posts },
+    revalidate: 60, // Revalidate every 60 seconds
+  };
+}
+```
+
+---
+
+## Real-World Example
+
+**[arky.io Implementation](https://github.com/0xdjole/arky.io)**:
+- `/src/pages/[...locale]/products/index.astro` - SSR CMS fetching
+- `/src/lib/index.ts` - Helper functions for blocks
+
+**Key Patterns**:
+- Server-side SDK init with API key
+- Collection fetched once per page
+- Block utilities for clean value extraction
+- CDN URLs built from storage path
+- Multilingual with fallbacks
+
+---
+
+## Next Steps
+
+- **[E-commerce Integration](/guides/integrations/ecommerce/)** - Add product catalog
+- **[Newsletter Integration](/guides/integrations/newsletter/)** - Add newsletter subscriptions
+- **[CMS API Reference](/api/cms/)** - Full API documentation
+- **[Blocks Guide](/guides/blocks/)** - Deep dive into block system

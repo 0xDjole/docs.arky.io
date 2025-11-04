@@ -8,6 +8,69 @@ import Tabs from '../../../components/Tabs.svelte';
 
 Manage your e-commerce catalog, process orders, and handle checkout flows.
 
+## Integration Patterns
+
+Before diving into the raw API, check out the **[E-commerce Integration Guide](/guides/integrations/ecommerce/)** for complete flows:
+
+- **Product Listing & Detail**: Browse catalog with variants and pricing
+- **Cart Management**: Client-side cart state with items
+- **Quote & Checkout**: Get totals, apply promo codes, and complete purchases
+- **Payment Handling**: Stripe checkout and confirmation
+
+### Complete E-commerce Flow
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+// Client-side init with guest token
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  autoGuest: true, // Auto-fetch guest token
+  // ... token handlers
+});
+
+// 1. Fetch products
+const { items: products } = await sdk.eshop.getProducts({
+  limit: 20,
+  market: 'us',
+});
+
+// 2. Get product detail
+const product = await sdk.eshop.getProduct({ id: 'prod_123' });
+
+// 3. Maintain cart state (client-side)
+const cart = [
+  { productId: 'prod_123', variantId: 'var_456', quantity: 2 },
+];
+
+// 4. Get quote (pricing, shipping, tax)
+const quote = await sdk.eshop.getQuote({
+  items: cart,
+  address: { /* shipping address */ },
+  promoCode: 'SAVE10',
+});
+
+// 5. Checkout
+const checkout = await sdk.eshop.checkout({
+  items: cart,
+  quote: quote.id,
+  paymentMethod: 'STRIPE',
+  returnUrl: 'https://yourapp.com/order/success',
+  cancelUrl: 'https://yourapp.com/cart',
+});
+
+// 6. Redirect to payment
+if (checkout.paymentUrl) {
+  window.location.href = checkout.paymentUrl;
+}
+```
+
+**See [E-commerce Integration Guide](/guides/integrations/ecommerce/) for complete patterns.**
+
+---
+
 ## Base URL
 
 All E-shop endpoints are prefixed with `/v1/businesses/{businessId}`.

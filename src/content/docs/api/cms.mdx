@@ -8,6 +8,61 @@ import Tabs from '../../../components/Tabs.svelte';
 
 Manage structured content with collections and entries. Arky's CMS uses a flexible blocks-based system for dynamic content modeling.
 
+## Integration Patterns
+
+Before using the raw API, see the **[CMS Content Integration Guide](/guides/integrations/cms/)** for complete patterns:
+
+- **SSR Content Fetching**: Server-side initialization with API keys
+- **Multilingual Content**: Locale-based fetching with fallbacks
+- **Block Value Extraction**: Use SDK utilities for clean value parsing
+- **Media CDN URLs**: Build optimized image URLs from storage paths
+
+### Typical SSR Content Flow
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+// Server-side init (Astro, Next.js, etc.)
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: process.env.ARKY_BUSINESS_ID,
+  autoGuest: false,
+  getToken: () => ({
+    accessToken: process.env.ARKY_API_KEY,
+    provider: 'API',
+    expiresAt: 0,
+  }),
+  setToken: () => {},
+  logout: () => {},
+});
+
+// Fetch collection
+const collection = await sdk.cms.getCollection({ id: 'blog' });
+
+// Fetch entries
+const { items: posts } = await sdk.cms.getCollectionEntries({
+  collectionId: 'blog',
+  limit: 20,
+});
+
+// Extract block values
+posts.forEach(post => {
+  const title = sdk.utils.getBlockTextValue(
+    post.blocks.find(b => b.key === 'title'),
+    'en' // locale
+  );
+  
+  const imageBlock = post.blocks.find(b => b.key === 'featured_image');
+  const imageUrl = sdk.utils.getImageUrl(imageBlock);
+  
+  console.log({ title, imageUrl });
+});
+```
+
+**See [CMS Integration Guide](/guides/integrations/cms/) for full patterns.**
+
+---
+
 ## Base URL
 
 All CMS endpoints are prefixed with `/v1/businesses/{businessId}`.

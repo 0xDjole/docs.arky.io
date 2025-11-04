@@ -1,12 +1,11 @@
 ---
 title: Media API
-description: File uploads, media library, and image transformations
-head: []
+description: Upload and manage media files (images, videos, documents)
 ---
 
 import Tabs from '../../../components/Tabs.svelte';
 
-Manage media uploads, transformations, and the media library. Files are stored in S3 with automatic image optimization.
+Manage media files for your business. Media is stored in S3-compatible storage with automatic image optimization and CDN delivery.
 
 ## Base URL
 
@@ -14,126 +13,52 @@ All Media endpoints are prefixed with `/v1/businesses/{businessId}`.
 
 ## Authentication
 
-Requires `Authorization: Bearer <access_token>` header with `WRITE` permissions.
+Requires `Authorization: Bearer <access_token>` header.
 
 ---
 
 ## Upload Media
 
-Upload files from local device or fetch from URLs.
+Upload files or fetch from URLs.
 
 **Endpoint:** `POST /v1/businesses/{businessId}/upload`
 
-**Content-Type:** `multipart/form-data`
-
 <Tabs client:load>
   <div slot="tab1">
 
 ```typescript
-// Upload local files
-const fileInput = document.querySelector('input[type="file"]');
-const files = Array.from(fileInput.files);
+// Upload files
+const files = [
+  document.getElementById('fileInput').files[0],
+  document.getElementById('fileInput2').files[0],
+];
 
-const media = await sdk.media.uploadBusinessMedia({
+const result = await sdk.media.uploadBusinessMedia({
   files: files,
-  urls: [], // Optional: fetch from URLs
 });
 
-console.log('Uploaded:', media.length, 'files');
-media.forEach((item) => {
-  console.log('ID:', item.id);
-  console.log('URL:', item.resolutions.original.url);
-  console.log('Size:', item.size, 'bytes');
-});
+console.log('Uploaded media:', result);
+// Returns array of media objects with IDs
 ```
-
-  </div>
-  <div slot="tab2">
-
-```bash
-# Upload local file
-curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -F "files=@/path/to/image.jpg" \
-  -F "files=@/path/to/document.pdf"
-
-# Fetch from URL
-curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -F "files=https://example.com/image.jpg"
-```
-
-  </div>
-</Tabs>
-
-**Response:**
-
-```json
-[
-  {
-    "id": "media_abc123",
-    "businessId": "biz_123",
-    "name": "product-photo.jpg",
-    "mimeType": "image/jpeg",
-    "size": 245678,
-    "resolutions": {
-      "original": {
-        "url": "https://storage.arky.io/original/abc123.jpg",
-        "width": 2000,
-        "height": 1500
-      },
-      "large": {
-        "url": "https://storage.arky.io/large/abc123.jpg",
-        "width": 1024,
-        "height": 768
-      },
-      "medium": {
-        "url": "https://storage.arky.io/medium/abc123.jpg",
-        "width": 512,
-        "height": 384
-      },
-      "small": {
-        "url": "https://storage.arky.io/small/abc123.jpg",
-        "width": 256,
-        "height": 192
-      }
-    },
-    "createdAt": 1698765432
-  }
-]
-```
-
----
-
-## Get Media Library
-
-List all media files with pagination.
-
-**Endpoint:** `GET /v1/businesses/{businessId}/media`
-
-<Tabs client:load>
-  <div slot="tab1">
 
 ```typescript
-const { data, cursor } = await sdk.media.getBusinessMedia({
-  limit: 20,
-  cursor: null, // or cursor from previous response
+// Or upload from URLs
+const result = await sdk.media.uploadBusinessMedia({
+  urls: [
+    'https://example.com/image1.jpg',
+    'https://example.com/image2.png',
+  ],
 });
-
-console.log('Media items:', data.length);
-console.log('Next cursor:', cursor);
 ```
 
   </div>
   <div slot="tab2">
 
 ```bash
-curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/media?limit=20" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-
-# With cursor for pagination
-curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/media?limit=20&cursor=CURSOR_VALUE" \
-  -H "Authorization: Bearer YOUR_TOKEN"
+curl -X POST https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "files=@/path/to/image1.jpg" \
+  -F "files=@/path/to/image2.png"
 ```
 
   </div>
@@ -143,36 +68,73 @@ curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/media?limit=20&cursor=C
 
 ```json
 {
-  "data": [
+  "items": [
     {
-      "id": "media_123",
-      "businessId": "biz_abc",
-      "name": "product-photo.jpg",
+      "id": "media_abc123",
+      "name": "image1.jpg",
       "mimeType": "image/jpeg",
       "size": 245678,
-      "resolutions": {...},
-      "createdAt": 1698765432
+      "url": "business_123/media/abc123.jpg",
+      "resolutions": {
+        "thumbnail": {
+          "url": "business_123/media/abc123_thumb.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "business_123/media/abc123_medium.jpg",
+          "width": 800,
+          "height": 600
+        },
+        "original": {
+          "url": "business_123/media/abc123.jpg",
+          "width": 1920,
+          "height": 1080
+        }
+      },
+      "createdAt": 1698765432,
+      "updatedAt": 1698765432
     }
-  ],
-  "cursor": "next_page_cursor_xyz"
+  ]
 }
 ```
 
+### Supported File Types
+
+- **Images**: JPG, PNG, GIF, WebP, SVG
+- **Videos**: MP4, WebM
+- **Documents**: PDF
+- **Other**: Any file type (stored as-is)
+
+### Automatic Image Processing
+
+Images are automatically optimized and resized:
+- **Thumbnail**: 150x150px (cropped)
+- **Medium**: 800px max width (maintains aspect ratio)
+- **Original**: Full resolution
+
 ---
 
-## Delete Media
+## Get Media
 
-Remove media from the library and storage.
+List all media files for your business.
 
-**Endpoint:** `DELETE /v1/businesses/{businessId}/upload?mediaId=...`
+**Endpoint:** `GET /v1/businesses/{businessId}/media`
 
 <Tabs client:load>
   <div slot="tab1">
 
 ```typescript
-await sdk.media.deleteBusinessMedia({
-  id: 'biz_abc123',
-  mediaId: 'media_xyz789',
+const { items, cursor } = await sdk.media.getBusinessMedia({
+  limit: 20,
+  cursor: null, // For pagination
+});
+
+items.forEach(media => {
+  console.log('File:', media.name);
+  console.log('Type:', media.mimeType);
+  console.log('URL:', media.url);
+  console.log('Resolutions:', media.resolutions);
 });
 ```
 
@@ -180,7 +142,42 @@ await sdk.media.deleteBusinessMedia({
   <div slot="tab2">
 
 ```bash
-curl -X DELETE "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload?mediaId=MEDIA_ID" \
+curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/media?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+  </div>
+</Tabs>
+
+**Query Parameters:**
+- `limit` (number): Items per page (default: 20, max: 100)
+- `cursor` (string): Pagination cursor from previous response
+
+---
+
+## Delete Media
+
+Delete a media file.
+
+**Endpoint:** `DELETE /v1/businesses/{businessId}/upload`
+
+<Tabs client:load>
+  <div slot="tab1">
+
+```typescript
+await sdk.media.deleteBusinessMedia({
+  id: 'your-business-id',
+  mediaId: 'media_abc123',
+});
+
+console.log('Media deleted');
+```
+
+  </div>
+  <div slot="tab2">
+
+```bash
+curl -X DELETE "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload?mediaId=media_abc123" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -189,186 +186,100 @@ curl -X DELETE "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/upload?mediaI
 
 ---
 
-## Image Resolutions
-
-Images are automatically resized to multiple resolutions:
-
-| Resolution | Max Width | Max Height | Use Case |
-|------------|-----------|------------|----------|
-| **original** | Unchanged | Unchanged | High-res downloads, zoom |
-| **large** | 1024px | 768px | Desktop displays |
-| **medium** | 512px | 384px | Mobile displays |
-| **small** | 256px | 192px | Thumbnails, lists |
-
-**Aspect Ratio:** Preserved in all resolutions
-
-**Format:** Images are served as WebP when supported by browser (automatic content negotiation)
-
----
-
-## Supported File Types
-
-### Images
-- JPEG (`.jpg`, `.jpeg`)
-- PNG (`.png`)
-- GIF (`.gif`)
-- WebP (`.webp`)
-- SVG (`.svg`)
-
-### Documents
-- PDF (`.pdf`)
-
-### Video
-- MP4 (`.mp4`)
-- WebM (`.webm`)
-
-**Max File Size:** 10MB per file (configurable)
-
----
-
 ## Using Media in Content
 
-### In Products
+Media files are referenced in blocks using `RELATIONSHIP_MEDIA` type:
 
-```typescript
-const product = await sdk.eshop.createProduct({
-  name: 'T-Shirt',
-  gallery: [
-    {
-      id: 'media_abc123',
-      url: 'https://storage.arky.io/large/abc123.jpg',
-      mimeType: 'image/jpeg',
-    },
-  ],
-  variants: [...],
-});
+```json
+{
+  "key": "gallery",
+  "type": "RELATIONSHIP_MEDIA",
+  "properties": {
+    "maxValues": 10
+  },
+  "value": [
+    "media:abc123",
+    "media:def456"
+  ]
+}
 ```
 
-### In CMS Entries
+When hydrated (via `?hydrate=true` query param), references expand to full media objects.
+
+---
+
+## Building CDN URLs
+
+Media URLs are relative paths. Build full URLs using your storage URL:
 
 ```typescript
-const entry = await sdk.cms.createCollectionEntry({
-  collectionId: 'blog_posts',
-  blocks: [
-    {
-      id: 'featured_image',
-      type: 'MEDIA',
-      value: {
-        id: 'media_abc123',
-        url: 'https://storage.arky.io/large/abc123.jpg',
-        mimeType: 'image/jpeg',
-      },
-    },
-  ],
-});
+const storageUrl = 'https://storage.arky.io';
+const media = { url: 'business_123/media/abc123.jpg' };
+
+const fullUrl = `${storageUrl}/${media.url}`;
+// "https://storage.arky.io/business_123/media/abc123.jpg"
+
+// Or use SDK utility
+const imageUrl = sdk.utils.getImageUrl(mediaBlock, true, storageUrl);
 ```
 
-### In Business Gallery
+### Resolutions
+
+Use different resolutions for performance:
 
 ```typescript
-const business = await sdk.business.updateBusiness({
-  gallery: [
-    {
-      id: 'media_abc123',
-      url: 'https://storage.arky.io/large/abc123.jpg',
-      mimeType: 'image/jpeg',
-    },
-  ],
-});
+const thumbnail = media.resolutions.thumbnail.url;
+const medium = media.resolutions.medium.url;
+const original = media.resolutions.original.url;
+
+// Build URLs
+const thumbnailUrl = `${storageUrl}/${thumbnail}`;
+const mediumUrl = `${storageUrl}/${medium}`;
+const originalUrl = `${storageUrl}/${original}`;
 ```
 
 ---
 
-## S3 Storage
+## Example: File Upload Form
 
-Media files are stored in S3-compatible object storage:
+```html
+<form id="uploadForm">
+  <input type="file" id="fileInput" multiple accept="image/*" />
+  <button type="submit">Upload</button>
+</form>
 
-**Storage Structure:**
+<script>
+  document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const files = Array.from(document.getElementById('fileInput').files);
+    
+    try {
+      const result = await sdk.media.uploadBusinessMedia({ files });
+      
+      console.log('Uploaded:', result.items.length, 'files');
+      result.items.forEach(media => {
+        console.log('Media ID:', media.id);
+        console.log('URL:', media.url);
+      });
+    } catch (error) {
+      console.error('Upload failed:', error);
+    }
+  });
+</script>
 ```
-bucket/
-├── original/
-│   └── {mediaId}.{ext}
-├── large/
-│   └── {mediaId}.jpg
-├── medium/
-│   └── {mediaId}.jpg
-└── small/
-    └── {mediaId}.jpg
-```
-
-**CDN:** All URLs are served through a CDN for optimal performance
-
-**Expiry:** Original files are retained indefinitely; unused media can be manually deleted
 
 ---
 
-## Best Practices
+## Storage Limits
 
-### 1. Upload Before Saving
-
-Upload media first, then reference in products/entries:
-
-```typescript
-// 1. Upload
-const [media] = await sdk.media.uploadBusinessMedia({
-  files: [imageFile],
-});
-
-// 2. Use in product
-const product = await sdk.eshop.createProduct({
-  gallery: [media],
-  ...
-});
-```
-
-### 2. Use Appropriate Resolution
-
-Choose resolution based on display context:
-
-```typescript
-// Thumbnail in list
-<img src={media.resolutions.small.url} />
-
-// Product detail page
-<img src={media.resolutions.large.url} />
-
-// Lightbox / zoom
-<img src={media.resolutions.original.url} />
-```
-
-### 3. Lazy Loading
-
-Use lazy loading for better performance:
-
-```html
-<img 
-  src={media.resolutions.medium.url}
-  loading="lazy"
-  alt="Product image"
-/>
-```
-
-### 4. Responsive Images
-
-Use `srcset` for responsive images:
-
-```html
-<img 
-  srcset="
-    ${media.resolutions.small.url} 256w,
-    ${media.resolutions.medium.url} 512w,
-    ${media.resolutions.large.url} 1024w
-  "
-  sizes="(max-width: 600px) 256px, (max-width: 1200px) 512px, 1024px"
-  src={media.resolutions.medium.url}
-  alt="Product"
-/>
-```
+- **Max file size**: 10MB per file
+- **Max files per upload**: 10 files
+- **Total storage**: Depends on your plan
 
 ---
 
 ## Related
 
-- **[Business API: Media Management](/api/business/#media-management)**
-- **[CMS API: Collections](/api/cms/#collections)**: Media in content
-- **[E-shop API: Products](/api/eshop/#products)**: Product galleries
+- **[Blocks Guide](/guides/blocks/)** - Using RELATIONSHIP_MEDIA blocks
+- **[CMS API](/api/cms/)** - Attaching media to CMS entries

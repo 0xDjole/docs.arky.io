@@ -1,6 +1,6 @@
 ---
 title: Blocks System
-description: Deep dive into Arky's unified block system for flexible, type-safe content modeling across all domains
+description: Deep dive into Arky's unified block system for flexible, type-safe content modeling
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -18,7 +18,6 @@ A **block** is a typed, key-value pair with metadata (properties) that defines h
   "type": "TEXT",
   "properties": {
     "label": { "en": "Title", "es": "Título" },
-    "variant": "DEFAULT",
     "maxLength": 255
   },
   "value": [
@@ -29,16 +28,21 @@ A **block** is a typed, key-value pair with metadata (properties) that defines h
 
 ### Block Types
 
-Arky supports six core block types:
+Arky supports these core block types:
 
 | Type | Description | Use Cases |
 |------|-------------|-----------|
-| `TEXT` | Multilingual text content | Titles, descriptions, HTML, URLs, phone numbers |
-| `NUMBER` | Numeric values with formatting | Prices, dates, percentages, ranges |
-| `BOOLEAN` | True/false flags | Feature toggles, checkboxes, yes/no fields |
-| `GEO_LOCATION` | Geographic coordinates & addresses | Store locations, delivery addresses, service areas |
-| `RELATIONSHIP` | References to other entities | Media files, related entries, product categories |
-| `BLOCK` | Nested block containers | Repeatable sections, complex forms, structured lists |
+| `TEXT` | Multilingual text content | Titles, descriptions, HTML content |
+| `TEXT_FILTER` | Text for filtering/search | Search queries, filter values |
+| `NUMBER` | Numeric values | Prices, dates (timestamps), quantities |
+| `NUMBER_FILTER` | Numeric filters | Price ranges, date filters |
+| `BOOLEAN` | True/false flags | Feature toggles, checkboxes |
+| `GEO_LOCATION` | Geographic coordinates & addresses | Store locations, delivery addresses |
+| `RELATIONSHIP_ENTRY` | References to CMS entries | Related posts, categories |
+| `RELATIONSHIP_MEDIA` | References to media files | Images, videos, documents |
+| `PHONE_NUMBER` | Phone number values | Contact info with validation |
+| `EMAIL` | Email addresses | Contact emails |
+| `BLOCK` | Nested block containers | Repeatable sections, complex forms |
 
 ---
 
@@ -69,23 +73,6 @@ Even single-value fields use arrays (`value: [...]`) to support:
 
 TEXT blocks handle all text-based content with optional multilingual support.
 
-### Variants
-
-```typescript
-enum TextVariant {
-  DEFAULT = "DEFAULT",
-  P = "P",               // Paragraph
-  H1 = "H1",             // Heading 1
-  H2 = "H2",
-  H3 = "H3",
-  HTML = "HTML",         // Rich HTML content
-  URL = "URL",           // Web links
-  LIST = "LIST",         // Multi-value text list
-  PHONE_NUMBER = "PHONE_NUMBER",
-  NOTE = "NOTE"          // Long-form notes
-}
-```
-
 ### Examples
 
 <Tabs>
@@ -97,7 +84,6 @@ enum TextVariant {
   "type": "TEXT",
   "properties": {
     "label": { "en": "Description" },
-    "variant": "DEFAULT",
     "maxLength": 500
   },
   "value": [
@@ -113,8 +99,7 @@ enum TextVariant {
   "key": "content",
   "type": "TEXT",
   "properties": {
-    "label": { "en": "Content", "es": "Contenido" },
-    "variant": "HTML"
+    "label": { "en": "Content", "es": "Contenido" }
   },
   "value": [
     {
@@ -125,14 +110,13 @@ enum TextVariant {
 }
 ```
   </TabItem>
-  <TabItem label="Tags (LIST)">
+  <TabItem label="Tags (Multi-value)">
 ```json
 {
   "id": "3",
   "key": "tags",
   "type": "TEXT",
   "properties": {
-    "variant": "LIST",
     "maxValues": 10
   },
   "value": [
@@ -150,13 +134,11 @@ enum TextVariant {
 ```typescript
 interface TextProperties {
   label?: Record<string, string>;  // Localized field labels
-  variant?: TextVariant;
   pattern?: string;                 // Regex validation
   minLength?: number;
   maxLength?: number;
   style?: Record<string, string>;   // CSS styles for UI rendering
   url?: string;                     // External link metadata
-  options?: string[];               // Pre-defined options (select)
   minValues?: number;
   maxValues?: number;               // 1 = single, >1 = multi-value
 }
@@ -166,61 +148,34 @@ interface TextProperties {
 
 ## NUMBER Blocks
 
-NUMBER blocks handle numeric values with optional formatting and date/time support.
-
-### Variants
-
-```typescript
-enum NumberVariant {
-  DEFAULT = "DEFAULT",
-  DATE = "DATE",          // Unix timestamp rendered as date
-  DATE_TIME = "DATE_TIME",
-  CURRENCY = "CURRENCY",  // Price formatting
-  PERCENTAGE = "PERCENTAGE",
-  RANGE = "RANGE"         // Min-max ranges
-}
-```
+NUMBER blocks handle numeric values.
 
 ### Examples
 
 <Tabs>
-  <TabItem label="Currency">
+  <TabItem label="Price">
 ```json
 {
   "id": "4",
   "key": "price",
   "type": "NUMBER",
   "properties": {
-    "label": { "en": "Price" },
-    "variant": "CURRENCY"
+    "label": { "en": "Price" }
   },
   "value": [29.99]
 }
 ```
   </TabItem>
-  <TabItem label="Date">
+  <TabItem label="Date (Unix timestamp)">
 ```json
 {
   "id": "5",
   "key": "publishedAt",
   "type": "NUMBER",
   "properties": {
-    "variant": "DATE"
+    "label": { "en": "Published Date" }
   },
-  "value": [1704067200]  // Unix timestamp
-}
-```
-  </TabItem>
-  <TabItem label="Percentage">
-```json
-{
-  "id": "6",
-  "key": "discount",
-  "type": "NUMBER",
-  "properties": {
-    "variant": "PERCENTAGE"
-  },
-  "value": [15.5]
+  "value": [1704067200]
 }
 ```
   </TabItem>
@@ -231,10 +186,9 @@ enum NumberVariant {
 ```typescript
 interface NumberProperties {
   label?: Record<string, string>;
-  variant?: NumberVariant;
-  options?: string[];         // Pre-defined numeric options
   minValues?: number;
   maxValues?: number;
+  operation?: "plus" | "minus" | "equals" | "greater_than" | "less_than" | "greater_than_or_equal" | "less_than_or_equal" | "contains";
 }
 ```
 
@@ -264,7 +218,6 @@ BOOLEAN blocks represent true/false states.
 ```typescript
 interface BooleanProperties {
   label?: Record<string, string>;
-  variant?: string;       // Custom UI hint (toggle, checkbox, etc.)
   maxValues?: number;
 }
 ```
@@ -317,28 +270,30 @@ interface GeoLocationValue {
 }
 ```
 
+### Properties
+
+```typescript
+interface GeoProperties {
+  label?: Record<string, string>;
+}
+```
+
 ---
 
 ## RELATIONSHIP Blocks
 
-RELATIONSHIP blocks reference other entities (media files, CMS entries, products, etc.).
+RELATIONSHIP blocks reference other entities (media files or CMS entries).
 
-### Variants
+### Types
 
-```typescript
-enum RelationshipVariant {
-  ENTRY = "ENTRY",       // Reference to CMS entries
-  MEDIA = "MEDIA"        // Reference to uploaded files
-}
-```
+- **RELATIONSHIP_MEDIA**: References to uploaded files
+- **RELATIONSHIP_ENTRY**: References to CMS entries
 
 ### Reference Format
 
 References use prefixed IDs:
 - `media:<id>` — Media files
 - `entry:<id>` — CMS entries
-- `product:<id>` — Products (in e-shop context)
-- `service:<id>` — Reservation services
 
 ### Examples
 
@@ -348,9 +303,8 @@ References use prefixed IDs:
 {
   "id": "9",
   "key": "gallery",
-  "type": "RELATIONSHIP",
+  "type": "RELATIONSHIP_MEDIA",
   "properties": {
-    "variant": "MEDIA",
     "maxValues": 10
   },
   "value": [
@@ -365,9 +319,8 @@ References use prefixed IDs:
 {
   "id": "9",
   "key": "gallery",
-  "type": "RELATIONSHIP",
+  "type": "RELATIONSHIP_MEDIA",
   "properties": {
-    "variant": "MEDIA",
     "maxValues": 10
   },
   "value": [
@@ -390,9 +343,8 @@ References use prefixed IDs:
 {
   "id": "10",
   "key": "relatedPosts",
-  "type": "RELATIONSHIP",
+  "type": "RELATIONSHIP_ENTRY",
   "properties": {
-    "variant": "ENTRY",
     "maxValues": 5
   },
   "value": [
@@ -412,17 +364,81 @@ By default, relationships return **dehydrated** references (`"media:xyz"`). Use 
 GET /v1/collections/posts/entries/123?hydrate=true
 ```
 
-Hydration resolves references to full objects (with media resolutions, entry titles, etc.).
-
 ### Properties
 
 ```typescript
 interface RelationshipProperties {
   label?: Record<string, string>;
-  variant?: RelationshipVariant;
   minValues?: number;
   maxValues?: number;
   url?: string;           // External source URL
+}
+```
+
+---
+
+## PHONE_NUMBER Blocks
+
+Dedicated phone number type with validation.
+
+### Example
+
+```json
+{
+  "id": "11",
+  "key": "contactPhone",
+  "type": "PHONE_NUMBER",
+  "properties": {
+    "label": { "en": "Contact Phone" },
+    "pattern": "^\\+?[0-9\\s-()]+$",
+    "isRequired": true,
+    "placeholder": "+1 (555) 123-4567"
+  },
+  "value": ["+15551234567"]
+}
+```
+
+### Properties
+
+```typescript
+interface PhoneNumberProperties {
+  label?: Record<string, string>;
+  pattern?: string;
+  isRequired?: boolean;
+  placeholder?: string;
+}
+```
+
+---
+
+## EMAIL Blocks
+
+Email address type.
+
+### Example
+
+```json
+{
+  "id": "12",
+  "key": "contactEmail",
+  "type": "EMAIL",
+  "properties": {
+    "label": { "en": "Email" }
+  },
+  "value": ["user@example.com"]
+}
+```
+
+### Properties
+
+```typescript
+interface TextProperties {
+  label?: Record<string, string>;
+  pattern?: string;
+  minLength?: number;
+  maxLength?: number;
+  minValues?: number;
+  maxValues?: number;
 }
 ```
 
@@ -448,7 +464,7 @@ BLOCK blocks contain nested arrays of other blocks, enabling repeatable sections
       "id": "contact_1",
       "key": "contact",
       "type": "BLOCK",
-      "properties": { "variant": "contact_card" },
+      "properties": {},
       "value": [
         {
           "id": "c1_name",
@@ -460,31 +476,9 @@ BLOCK blocks contain nested arrays of other blocks, enabling repeatable sections
         {
           "id": "c1_phone",
           "key": "phone",
-          "type": "TEXT",
-          "properties": { "variant": "PHONE_NUMBER" },
-          "value": [{ "en": "+1234567890" }]
-        }
-      ]
-    },
-    {
-      "id": "contact_2",
-      "key": "contact",
-      "type": "BLOCK",
-      "properties": { "variant": "contact_card" },
-      "value": [
-        {
-          "id": "c2_name",
-          "key": "name",
-          "type": "TEXT",
+          "type": "PHONE_NUMBER",
           "properties": {},
-          "value": [{ "en": "Jane Smith" }]
-        },
-        {
-          "id": "c2_phone",
-          "key": "phone",
-          "type": "TEXT",
-          "properties": { "variant": "PHONE_NUMBER" },
-          "value": [{ "en": "+0987654321" }]
+          "value": ["+1234567890"]
         }
       ]
     }
@@ -504,7 +498,6 @@ BLOCK blocks contain nested arrays of other blocks, enabling repeatable sections
 ```typescript
 interface BlockProperties {
   label?: Record<string, string>;
-  variant?: string;           // Semantic hint (e.g., "badge", "contact_card")
   each?: string;              // Iteration hint for rendering
   style?: Record<string, string>;
   url?: string;
@@ -515,100 +508,39 @@ interface BlockProperties {
 
 ---
 
-## AI Block Generation
+## Filter Blocks
 
-Arky can **generate or modify blocks using AI** based on natural language prompts.
+Special block types for filtering and search:
 
-### Endpoint
+### TEXT_FILTER
 
-```http
-POST /v1/cms/ai/blocks/generate
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "prompt": "Add a section with title 'Features' and 3 feature items, each with a title and description",
-  "blocks": [],
-  "model": "gpt-4",
-  "businessId": "biz_123",
-  "relationships": [],
-  "variables": []
-}
-```
-
-### Response
+Used for text-based filtering (search queries).
 
 ```json
 {
-  "blocks": [
-    {
-      "id": "gen_1",
-      "key": "features",
-      "type": "BLOCK",
-      "properties": { "label": { "en": "Features" } },
-      "value": [
-        {
-          "id": "feat_1",
-          "key": "feature",
-          "type": "BLOCK",
-          "properties": {},
-          "value": [
-            {
-              "id": "f1_title",
-              "key": "title",
-              "type": "TEXT",
-              "properties": {},
-              "value": [{ "en": "Fast Performance" }]
-            },
-            {
-              "id": "f1_desc",
-              "key": "description",
-              "type": "TEXT",
-              "properties": {},
-              "value": [{ "en": "Optimized for speed" }]
-            }
-          ]
-        }
-        // ... more feature blocks
-      ]
-    }
-  ],
-  "usage": {
-    "promptTokens": 150,
-    "completionTokens": 320,
-    "totalTokens": 470
-  }
+  "id": "f1",
+  "key": "searchQuery",
+  "type": "TEXT_FILTER",
+  "properties": {},
+  "value": ["smartphone"]
 }
 ```
 
-### Supported Models
+### NUMBER_FILTER
 
-- **OpenAI**: `gpt-4`, `gpt-4o`, `gpt-4-turbo`, `gpt-3.5-turbo`
-- **Anthropic**: `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`
-
-Configure AI provider credentials in your business settings.
-
-### Variables (Template Metadata)
-
-When generating blocks for **newsletter templates** or **email templates**, you can provide variable metadata so the AI understands available dynamic fields:
+Used for numeric filtering (price ranges, date ranges).
 
 ```json
 {
-  "variables": [
-    {
-      "name": "user",
-      "description": "Subscriber information",
-      "variableType": "OBJECT",
-      "children": [
-        { "name": "firstName", "variableType": "STRING" },
-        { "name": "email", "variableType": "STRING" }
-      ]
-    }
-  ]
+  "id": "f2",
+  "key": "priceFilter",
+  "type": "NUMBER_FILTER",
+  "properties": {
+    "operation": "less_than_or_equal"
+  },
+  "value": [">=100", "<=500"]
 }
 ```
-
-The AI will generate blocks that reference these variables using Handlebars-style syntax (`{{user.firstName}}`).
 
 ---
 
@@ -616,15 +548,13 @@ The AI will generate blocks that reference these variables using Handlebars-styl
 
 ### Extracting Values
 
-<Tabs>
-  <TabItem label="TypeScript">
 ```typescript
 import { getBlockValue, getBlockTextValue, extractBlockValues } from 'arky-sdk/utils/blocks';
 
-const entry = await sdk.cms.entries.get('collection_id', 'entry_id');
+const entry = await sdk.cms.getCollectionEntry({ id: 'entry_123' });
 
 // Single value
-const title = getBlockValue(entry, 'title'); // Returns first value
+const title = getBlockValue(entry, 'title');
 
 // Localized text
 const description = getBlockTextValue(
@@ -636,102 +566,33 @@ const description = getBlockTextValue(
 const values = extractBlockValues(entry.blocks);
 // { title: "...", price: 29.99, featured: true }
 ```
-  </TabItem>
-</Tabs>
-
-### Preparing for Submission
-
-<Tabs>
-  <TabItem label="TypeScript">
-```typescript
-import { prepareBlocksForSubmission } from 'arky-sdk/utils/blocks';
-
-const formData = {
-  title: "New Product",
-  price: 49.99,
-  featured: true,
-  tags: ["electronics", "gadgets"]
-};
-
-const blocks = prepareBlocksForSubmission(formData);
-// [
-//   { key: "title", value: ["New Product"] },
-//   { key: "price", value: [49.99] },
-//   { key: "featured", value: [true] },
-//   { key: "tags", value: [["electronics", "gadgets"]] }
-// ]
-
-await sdk.cms.entries.create('products', {
-  title: "New Product",
-  blocks
-});
-```
-  </TabItem>
-</Tabs>
-
-### Nested Block Extraction
-
-<Tabs>
-  <TabItem label="TypeScript">
-```typescript
-import { getBlockObjectValues } from 'arky-sdk/utils/blocks';
-
-const entry = await sdk.cms.entries.get('events', 'event_123');
-
-// Extract nested block array
-const speakers = getBlockObjectValues(entry, 'speakers', 'en');
-// [
-//   { name: "John Doe", bio: "..." },
-//   { name: "Jane Smith", bio: "..." }
-// ]
-```
-  </TabItem>
-</Tabs>
 
 ### Handling Media
 
-<Tabs>
-  <TabItem label="TypeScript">
 ```typescript
 import { getImageUrl } from 'arky-sdk/utils/blocks';
 
-const product = await sdk.eshop.products.get('prod_123');
+const product = await sdk.eshop.getProduct({ id: 'prod_123' });
 const galleryBlock = product.blocks.find(b => b.key === 'gallery');
 
 // Extract first image URL
-const imageUrl = getImageUrl(galleryBlock, true, 'https://storage.arky.io/prod');
-// "https://storage.arky.io/prod/business_123/media/abc123.jpg"
+const imageUrl = getImageUrl(galleryBlock, true, 'https://storage.arky.io');
+// "https://storage.arky.io/business_123/media/abc123.jpg"
 ```
-  </TabItem>
-</Tabs>
-
----
-
-## Block Validation
-
-Blocks are validated server-side based on their properties:
-
-- **TEXT**: `minLength`, `maxLength`, `pattern` (regex)
-- **NUMBER**: Numeric type checking, `variant` formatting
-- **BOOLEAN**: Must be `true` or `false`
-- **GEO_LOCATION**: Coordinate ranges, country code format
-- **RELATIONSHIP**: Referenced entities must exist
-- **BLOCK**: Nested blocks validated recursively
-
-### Max Values
-
-The `maxValues` property controls:
-- `1` — Single value (enforce single item in `value` array)
-- `> 1` — Multi-value (e.g., tags, galleries)
-- `undefined` — Unlimited
 
 ---
 
 ## Best Practices
 
+### Use Appropriate Types
+
+- Use `PHONE_NUMBER` instead of `TEXT` for phone numbers
+- Use `EMAIL` instead of `TEXT` for emails  
+- Use `GEO_LOCATION` instead of separate text fields for addresses
+
 ### Localization
 
-Always provide multilingual labels and content for international apps:
+Always provide multilingual labels and content:
 
 ```json
 {
@@ -750,13 +611,6 @@ Use descriptive, consistent keys:
 - ✅ `productName`, `price`, `publishedAt`
 - ❌ `field1`, `data`, `text`
 
-### Variants for Context
-
-Use variants to provide rendering/formatting hints:
-- `TEXT` with `variant: "HTML"` for rich content
-- `NUMBER` with `variant: "CURRENCY"` for prices
-- `BLOCK` with `variant: "badge"` for custom UI components
-
 ### Dehydrate by Default
 
 Fetch relationships dehydrated (`media:xyz`) unless you need full objects. This reduces payload size and improves performance.
@@ -772,4 +626,3 @@ Use `BLOCK` type for repeatable, structured sections rather than hardcoding mult
 - [CMS API](/api/cms) — Collections and entries with block-based content
 - [E-shop API](/api/eshop) — Products with block-based specifications
 - [Reservations API](/api/reservations) — Services and bookings with custom block fields
-- [SDK Usage](/guides/sdk) — Utility functions for blocks

@@ -6,58 +6,100 @@ head: []
 
 # Welcome to Arky
 
-**Arky** is an all-in-one business platform that provides everything you need to build modern web applications with content management, e-commerce, booking/reservations, and newsletter capabilities—all accessible via a unified REST API and TypeScript SDK.
+**Arky** is a developer-first platform for building modern web applications. Power your storefronts, booking systems, content sites, and newsletters with one unified TypeScript SDK.
 
-## What is Arky?
+## What You Can Build
 
-Arky combines four core systems into a single, cohesive platform:
+With Arky, you can quickly integrate:
 
-- **Headless CMS**: Flexible content management with a unified Blocks system for structured data
-- **E-commerce**: Full-featured online store with products, variants, orders, carts, and checkout
-- **Reservations**: Service booking and appointment scheduling with providers, time slots, and availability management
-- **Newsletters**: Email campaigns with subscriber management and delivery tracking
+### 🛒 **E-commerce Storefronts**
+Fetch products, build carts, process payments, and manage orders
 
-All of these systems share:
-- **Unified authentication** (JWT, API keys, guest tokens, OAuth via Google)
-- **Flexible pricing** with multi-market and multi-currency support
-- **Blocks-based data model** for forms, custom fields, and dynamic content
-- **Real-time capabilities** via WebSocket notifications
-- **Rich media management** with S3 storage and automatic resolutions
-- **Analytics** via ClickHouse for business insights
+```typescript
+const { items: products } = await sdk.eshop.getProducts({ status: 'ACTIVE', limit: 20 });
+const product = await sdk.eshop.getProduct({ id: 'prod_123' });
+const quote = await sdk.eshop.getQuote({ items: cartItems, currency: 'usd' });
+const result = await sdk.eshop.checkout({ items: cartItems, paymentMethod: 'CREDIT_CARD' });
+```
 
-## Why Arky?
+**[→ See E-commerce Integration Guide](/guides/integrations/ecommerce/)**
 
-### 1. **One Platform, Multiple Use Cases**
+### 📅 **Booking & Reservation Systems**
+List services, show availability, accept bookings with payments
 
-Instead of stitching together separate services for CMS, e-commerce, bookings, and email—each with different APIs, auth systems, and billing—Arky provides a single, unified API surface.
+```typescript
+const { items: services } = await sdk.reservation.getServices({ limit: 50 });
+const { items: providers } = await sdk.reservation.getProviders({ limit: 50 });
+const slots = await sdk.reservation.getAvailableSlots({ serviceId: 'svc_123', providerId: 'prov_456', from, to });
+const result = await sdk.reservation.checkout({ parts: [{ serviceId, providerId, startTime, endTime }] });
+```
 
-### 2. **Headless & Framework-Agnostic**
+**[→ See Reservation Booking Guide](/guides/integrations/reservations/)**
 
-Arky is fully headless. Use it with:
-- **Astro** (as seen in the website example)
+### 📝 **Content-Driven Websites**
+Pull CMS content for blogs, pages, and multilingual sites
+
+```typescript
+const collection = await sdk.cms.getCollection({ id: 'blog' });
+const { items: posts } = await sdk.cms.getCollectionEntries({ collectionId: 'blog', limit: 20 });
+const title = sdk.utils.getBlockTextValue(post.blocks.find(b => b.key === 'title'), 'en');
+```
+
+**[→ See CMS Content Integration Guide](/guides/integrations/cms/)**
+
+### 📧 **Newsletter Subscriptions**
+Manage free and paid newsletter subscriptions with Stripe payments
+
+```typescript
+const { items: newsletters } = await sdk.cms.getCollections({ type: 'NEWSLETTER' });
+await sdk.cms.subscribeToCollection({ collectionId, email, planId: 'plan_free' });
+```
+
+**[→ See Newsletter Integration Guide](/guides/integrations/newsletter/)**
+
+## Features Built-In
+
+- **🔐 Authentication**: Guest tokens, email/password, OAuth (Google), API keys
+- **💳 Payments**: Stripe integration with multi-currency support
+- **🌍 Multi-Market**: Different pricing and taxes per region
+- **📦 Media Management**: S3-backed with automatic image optimization
+- **🔄 Real-time**: WebSocket support for live updates
+
+## Developer-First Documentation
+
+This documentation focuses on **integration patterns** - showing you exactly how to fetch data, build features, and integrate Arky into your applications.
+
+### Quick Navigation
+
+**Getting Started**
+- [Quick Start](/quick-start/) - SDK setup and first API calls
+- [SDK Usage Guide](/guides/sdk/) - Tokens, SSR/CSR, error handling
+
+**Integration Guides** (Learn by building)
+- [E-commerce Integration](/guides/integrations/ecommerce/)
+- [Reservation Booking](/guides/integrations/reservations/)
+- [CMS Content](/guides/integrations/cms/)
+- [Newsletter Subscriptions](/guides/integrations/newsletter/)
+- [Authentication](/guides/integrations/auth/)
+
+**API Reference** (When you need details)
+- [CMS API](/api/cms/)
+- [E-Shop API](/api/eshop/)
+- [Reservations API](/api/reservations/)
+- [Users & Auth API](/api/users/)
+
+:::note[About Admin Operations]
+This documentation emphasizes **integration and data fetching** for developers building frontends. Admin operations (creating products, services, collections) are available in the API Reference but are not the primary focus.
+:::
+
+## Supported Frameworks
+
+Arky is fully headless and works with any JavaScript/TypeScript framework:
+- **Astro** (SSR) - See [arky.io](https://github.com/0xdjole/arky.io) for examples
 - **React** / **Next.js**
 - **Vue** / **Nuxt**
 - **Svelte** / **SvelteKit**
-- Or any JavaScript/TypeScript framework
-
-### 3. **Blocks System**
-
-A powerful, type-safe field system inspired by modern CMS tools. Define forms, product attributes, reservation metadata, and more using reusable "blocks" (Text, Number, Boolean, Relationship, GeoLocation, etc.).
-
-### 4. **Multi-Market & Multi-Currency**
-
-Built-in support for:
-- **Markets** (e.g., US, EU, UK) with distinct currencies, tax modes, and payment methods
-- **Zones** (geographic groupings) with country-based shipping and tax rules
-- **Market-based pricing** on products and services
-
-### 5. **Built for Scale**
-
-Arky is built for production from day one:
-- **Distributed & highly available** across multiple regions
-- **Fast** with automatic caching and optimized queries
-- **Reliable** with automatic backups and 99.9% uptime SLA
-- **Secure** with SOC 2 compliance and data encryption at rest
+- Vanilla JavaScript
 
 ## How It Works
 

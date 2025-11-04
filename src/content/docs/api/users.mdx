@@ -8,6 +8,52 @@ import Tabs from '../../../components/Tabs.svelte';
 
 Manage user authentication, profiles, roles, and permissions.
 
+## Integration Patterns
+
+Before diving into the raw API, check out the **[Authentication Integration Guide](/guides/integrations/auth/)** for complete flows:
+
+- **Registration & Login**: Email/password and OAuth (Google)
+- **Token Management**: Guest, authenticated, and server tokens
+- **Protected Routes**: SSR and CSR auth patterns
+- **Profile Management**: Update user info with correct field names
+
+### Quick Integration Example
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  autoGuest: true,
+  getToken: () => JSON.parse(localStorage.getItem('arky_token') || 'null'),
+  setToken: (token) => localStorage.setItem('arky_token', JSON.stringify(token)),
+  logout: () => localStorage.removeItem('arky_token'),
+});
+
+// Register
+const { user, token } = await sdk.user.register({
+  email: 'user@example.com',
+  password: 'SecurePass123!',
+  firstName: 'John',
+  lastName: 'Doe',
+});
+
+// Get profile
+const me = await sdk.user.me();
+
+// Update profile (note: phoneNumbers is an array)
+await sdk.user.updateUser({
+  id: me.id,
+  firstName: 'Jane',
+  phoneNumbers: ['+1234567890'], // Array, not singular phoneNumber
+});
+```
+
+**See [Authentication Guide](/guides/integrations/auth/) for complete patterns.**
+
+---
+
 ## Base URL
 
 All User endpoints are prefixed with `/v1/users`.
@@ -405,7 +451,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ---
 
-## Update Profile
+### Update Profile
 
 **Endpoint:** `PUT /v1/users/update`
 
@@ -417,7 +463,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 ```typescript
 const updated = await sdk.user.updateUser({
   name: 'Jane Smith',
-  phoneNumber: '+1234567890',
+  phoneNumbers: ['+1234567890'], // Array of phone numbers
   addresses: [
     {
       street: '123 Main St',
@@ -439,10 +485,9 @@ curl -X PUT https://api.arky.io/v1/users/update \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Jane Smith",
-    "phoneNumber": "+1234567890",
+    "phoneNumbers": ["+1234567890"],
     "addresses": [...]
-  }'
-```
+  }'```
 
   </div>
 </Tabs>
@@ -451,13 +496,15 @@ curl -X PUT https://api.arky.io/v1/users/update \
 
 ## Phone Verification
 
-### Update Phone Number
+### Add Phone Number
+
+**Endpoint:** `POST /v1/users/phone-number`
 
 <Tabs client:load>
   <div slot="tab1">
 
 ```typescript
-await sdk.user.updateProfilePhone({
+await sdk.user.addPhoneNumber({
   phoneNumber: '+1234567890',
 });
 // Verification SMS sent
@@ -467,28 +514,26 @@ await sdk.user.updateProfilePhone({
   <div slot="tab2">
 
 ```bash
-curl -X PUT https://api.arky.io/v1/users/update \
+curl -X POST https://api.arky.io/v1/users/phone-number \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "phoneNumber": "+1234567890",
-    "phoneNumbers": [],
-    "addresses": []
+    "phoneNumber": "+1234567890"
   }'
 ```
 
   </div>
 </Tabs>
 
-### Verify Code
+### Verify Phone Code
 
-**Endpoint:** `PUT /v1/users/confirm/phone-number`
+**Endpoint:** `POST /v1/users/phone-number/confirm`
 
 <Tabs client:load>
   <div slot="tab1">
 
 ```typescript
-await sdk.user.verifyPhoneCode({
+await sdk.user.phoneNumberConfirm({
   phoneNumber: '+1234567890',
   code: '123456',
 });
@@ -498,7 +543,7 @@ await sdk.user.verifyPhoneCode({
   <div slot="tab2">
 
 ```bash
-curl -X PUT https://api.arky.io/v1/users/confirm/phone-number \
+curl -X POST https://api.arky.io/v1/users/phone-number/confirm \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -798,6 +843,6 @@ Same as access token, but `exp` is `null` (never expires).
 
 ## Related
 
-- **[Core Concepts: Authentication](/core-concepts/#authentication)**
-- **[Business API: Team Invitations](/api/business/#team-invitations)**
-- **[Guides: Authentication](/guides/auth/)**
+- **[Authentication Integration Guide](/guides/integrations/auth/)** - Complete auth flows and patterns
+- **[E-commerce Integration](/guides/integrations/ecommerce/)** - Checkout with authenticated users
+- **[Reservations Integration](/guides/integrations/reservations/)** - Book services as logged-in user

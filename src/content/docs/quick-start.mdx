@@ -8,25 +8,19 @@ import Tabs from '../../components/Tabs.svelte';
 
 # Quick Start
 
-Get your first Arky application running in under 5 minutes.
-
-## Prerequisites
-
-- Node.js 18+ and npm/yarn/pnpm
-- An Arky account and Business ID (sign up at [arky.io](https://arky.io))
-- API access token or use guest mode for public data
+Get up and running with Arky in 5 minutes. This guide shows you how to initialize the SDK and start fetching data immediately.
 
 ## Installation
-
-Install the Arky SDK in your project:
 
 ```bash
 npm install arky-sdk
 ```
 
-## Initialize the SDK
+## SDK Initialization Patterns
 
-Create an SDK instance with your configuration:
+### Pattern 1: Client-Side with Guest Token (Browsing Products/Services)
+
+Perfect for public data like product listings, service browsing, and CMS content.
 
 ```typescript
 import { createArkySDK } from 'arky-sdk';
@@ -34,34 +28,107 @@ import { createArkySDK } from 'arky-sdk';
 const sdk = createArkySDK({
   baseUrl: 'https://api.arky.io',
   businessId: 'your-business-id',
-  market: 'US', // or 'EU', 'UK', etc.
+  market: 'us',
   storageUrl: 'https://storage.arky.io',
   
-  // Token management (implement based on your auth strategy)
-  getToken: async () => {
-    // Return stored tokens from localStorage, cookies, or your auth provider
-    const accessToken = localStorage.getItem('accessToken') || '';
-    const refreshToken = localStorage.getItem('refreshToken') || '';
-    return { accessToken, refreshToken };
-  },
+  autoGuest: true, // Automatically creates guest token on first request
+  
+  getToken: () => ({
+    accessToken: localStorage.getItem('accessToken') || '',
+    refreshToken: localStorage.getItem('refreshToken') || '',
+    provider: 'GUEST',
+    expiresAt: parseInt(localStorage.getItem('expiresAt') || '0'),
+  }),
   
   setToken: (tokens) => {
-    // Persist tokens when received or refreshed
     localStorage.setItem('accessToken', tokens.accessToken);
-    if (tokens.refreshToken) {
-      localStorage.setItem('refreshToken', tokens.refreshToken);
-    }
+    if (tokens.refreshToken) localStorage.setItem('refreshToken', tokens.refreshToken);
+    if (tokens.expiresAt) localStorage.setItem('expiresAt', tokens.expiresAt.toString());
   },
   
   logout: () => {
-    // Clear tokens on logout
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    localStorage.removeItem('expiresAt');
+  },
+});
+
+// Now you can fetch data immediately
+const { items: products } = await sdk.eshop.getProducts({ status: 'ACTIVE', limit: 20 });
+```
+
+### Pattern 2: Server-Side with API Key (SSR in Astro/Next.js)
+
+For server-side rendering where you need to fetch data at build time or on request.
+
+```typescript
+// In Astro, Next.js, or other SSR environments
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  storageUrl: 'https://storage.arky.io',
+  
+  autoGuest: false, // Don't create guest tokens on server
+  
+  getToken: () => ({
+    accessToken: process.env.ARKY_API_KEY || '', // Server API key
+    provider: 'API',
+    expiresAt: 0,
+  }),
+  
+  setToken: () => {}, // No-op on server
+  logout: () => {},
+});
+
+// Fetch CMS content for SSR
+const collection = await sdk.cms.getCollection({ id: 'website' });
+const { items: posts } = await sdk.cms.getCollectionEntries({ collectionId: 'blog', limit: 10 });
+```
+
+### Pattern 3: Authenticated User (Checkout, Bookings, Account Management)
+
+After user logs in, attach their auth token to enable protected operations.
+
+```typescript
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  autoGuest: false, // We'll handle auth manually
+  
+  getToken: () => ({
+    accessToken: localStorage.getItem('userToken') || '',
+    refreshToken: localStorage.getItem('refreshToken') || '',
+    provider: 'EMAIL', // or 'GOOGLE'
+    expiresAt: parseInt(localStorage.getItem('expiresAt') || '0'),
+  }),
+  
+  setToken: (tokens) => {
+    localStorage.setItem('userToken', tokens.accessToken);
+    if (tokens.refreshToken) localStorage.setItem('refreshToken', tokens.refreshToken);
+    if (tokens.expiresAt) localStorage.setItem('expiresAt', tokens.expiresAt.toString());
   },
   
-  // Optional: Auto-create guest token if no auth (default: true)
-  autoGuest: true,
+  logout: () => {
+    localStorage.clear();
+    window.location.href = '/login';
+  },
 });
+
+// Login first
+const auth = await sdk.user.loginUser({
+  email: 'user@example.com',
+  password: 'password',
+  provider: 'EMAIL',
+});
+// Tokens automatically stored via setToken
+
+// Now you can do protected operations
+const user = await sdk.user.getMe({});
+const result = await sdk.eshop.checkout({ items: cartItems, paymentMethod: 'CREDIT_CARD' });
 ```
 
 ## Make Your First Request
@@ -100,14 +167,15 @@ curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
 const collection = await sdk.cms.getCollection({ id: 'blog' });
 
 // Get entries from the collection
-const { data: posts } = await sdk.cms.getCollectionEntries({
+const { items: posts } = await sdk.cms.getCollectionEntries({
   collectionId: 'blog',
   limit: 10,
 });
 
 posts.forEach(post => {
   const title = sdk.utils.getBlockTextValue(
-    post.blocks.find(b => b.key === 'title')
+    post.blocks.find(b => b.key === 'title'),
+    'en' // locale
   );
   console.log('Post:', title);
 });
@@ -134,7 +202,7 @@ curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/entries?owner=collectio
 
 ```typescript
 // List products
-const { data: products } = await sdk.eshop.getProducts({
+const { items: products } = await sdk.eshop.getProducts({
   status: 'ACTIVE',
   limit: 20,
 });
@@ -142,7 +210,7 @@ const { data: products } = await sdk.eshop.getProducts({
 products.forEach(product => {
   const price = sdk.utils.getMarketPrice(
     product.variants[0].prices,
-    'US' // market
+    'us' // market code lowercase
   );
   console.log(`${product.name}: ${price}`);
 });
@@ -159,93 +227,20 @@ curl "https://api.arky.io/v1/businesses/YOUR_BUSINESS_ID/products?status=ACTIVE&
   </div>
 </Tabs>
 
-## Framework Integration
+## Framework Support
 
-### React / Next.js
+Arky works with any JavaScript/TypeScript framework:
 
-```tsx
-import { createArkySDK } from 'arky-sdk';
-import { useState, useEffect } from 'react';
+- **React** / Next.js
+- **Vue** / Nuxt
+- **Svelte** / SvelteKit
+- **Astro**
+- **Angular**
+- **Vanilla JS/TS**
+- **Node.js** / Express / Fastify
+- Any other JavaScript environment
 
-const sdk = createArkySDK({ /* config */ });
-
-export function ProductList() {
-  const [products, setProducts] = useState([]);
-  
-  useEffect(() => {
-    sdk.eshop.getProducts({ limit: 10 }).then(res => {
-      setProducts(res.data);
-    });
-  }, []);
-  
-  return (
-    <div>
-      {products.map(p => (
-        <div key={p.id}>{p.name}</div>
-      ))}
-    </div>
-  );
-}
-```
-
-### Vue / Nuxt
-
-```vue
-<script setup>
-import { ref, onMounted } from 'vue';
-import { createArkySDK } from 'arky-sdk';
-
-const sdk = createArkySDK({ /* config */ });
-const products = ref([]);
-
-onMounted(async () => {
-  const res = await sdk.eshop.getProducts({ limit: 10 });
-  products.value = res.data;
-});
-</script>
-
-<template>
-  <div v-for="p in products" :key="p.id">
-    {{ p.name }}
-  </div>
-</template>
-```
-
-### Svelte / SvelteKit
-
-```svelte
-<script>
-  import { createArkySDK } from 'arky-sdk';
-  import { onMount } from 'svelte';
-  
-  const sdk = createArkySDK({ /* config */ });
-  let products = [];
-  
-  onMount(async () => {
-    const res = await sdk.eshop.getProducts({ limit: 10 });
-    products = res.data;
-  });
-</script>
-
-{#each products as p (p.id)}
-  <div>{p.name}</div>
-{/each}
-```
-
-### Astro
-
-```astro
----
-import { createArkySDK } from 'arky-sdk';
-
-const sdk = createArkySDK({ /* config */ });
-const { data: products } = await sdk.eshop.getProducts({ limit: 10 });
----
-
-{products.map(p => (
-  <div>{p.name}</div>
-))}
-```
+The SDK is framework-agnostic - just import and use it.
 
 ## Authentication Strategies
 

@@ -8,6 +8,85 @@ import Tabs from '../../../components/Tabs.svelte';
 
 Manage your booking system with services, providers, availability, and reservations.
 
+## Integration Patterns
+
+Before using the raw API, see the **[Reservation Booking Integration Guide](/guides/integrations/reservations/)** for complete flows:
+
+- **Service Browsing**: List services with pricing and duration
+- **Provider Schedules**: Fetch working hours and availability
+- **Slot Selection**: Get available time slots for booking
+- **Quote & Checkout**: Price calculation and payment
+
+### Complete Booking Flow
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+// Client-side init with guest token
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  autoGuest: true,
+  // ... token handlers
+});
+
+// 1. Fetch services
+const { items: services } = await sdk.reservation.getServices({
+  limit: 20,
+});
+
+// 2. Get service detail
+const service = await sdk.reservation.getService({ id: 'svc_123' });
+
+// 3. Get provider schedule
+const schedule = await sdk.reservation.getProviderWorkingTime({
+  providerId: 'provider_456',
+  from: startDate,
+  to: endDate,
+});
+
+// 4. Get available slots
+const { items: slots } = await sdk.reservation.getAvailableSlots({
+  serviceId: 'svc_123',
+  providerId: 'prov_456',
+  from: startDate,
+  to: endDate,
+});
+
+// 5. Get quote
+const quote = await sdk.reservation.getQuote({
+  currency: 'usd',
+  paymentMethod: 'CREDIT_CARD',
+  parts: [{
+    serviceId: 'svc_123',
+    providerId: 'prov_456',
+    startTime: selectedSlot.startTime,
+    endTime: selectedSlot.endTime,
+  }],
+});
+
+// 6. Checkout (create reservation)
+const reservation = await sdk.reservation.checkout({
+  parts: [{
+    serviceId: 'svc_123',
+    providerId: 'prov_456',
+    startTime: selectedSlot.startTime,
+    endTime: selectedSlot.endTime,
+  }],
+  paymentMethod: 'CREDIT_CARD',
+});
+
+// 7. Redirect to payment if needed
+if (reservation.paymentUrl) {
+  window.location.href = reservation.paymentUrl;
+}
+```
+
+**See [Reservation Integration Guide](/guides/integrations/reservations/) for full patterns.**
+
+---
+
 ## Base URL
 
 - Services/Providers: `/v1/businesses/{businessId}`

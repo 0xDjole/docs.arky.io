@@ -1,0 +1,432 @@
+---
+title: Newsletter Integration
+description: Implement newsletter subscriptions with free and paid plans
+---
+
+# Newsletter Integration
+
+Add newsletter functionality to your application with support for free and paid subscription plans.
+
+## What You'll Build
+
+- Newsletter listing page
+- Subscription form (free and paid plans)
+- Stripe checkout for paid subscriptions
+- Unsubscribe functionality
+- Subscriber management (admin)
+
+## Prerequisites
+
+- **Token Type**: Guest token for public subscriptions
+- **Payment Setup**: Stripe configured for paid newsletter plans
+- **CMS Setup**: Newsletter collections created with plans
+
+---
+
+## Complete Integration Flow
+
+### 1. List Newsletter Collections
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  autoGuest: true, // Guest token for browsing
+  // ... token handlers
+});
+
+// Fetch all newsletter collections
+const { items: collections } = await sdk.cms.getCollections({
+  type: 'NEWSLETTER', // Filter by type
+  limit: 50,
+});
+
+collections.forEach(newsletter => {
+  console.log('Newsletter:', newsletter.name);
+  console.log('Description:', newsletter.description);
+  console.log('Plans:', newsletter.plans); // Array of subscription plans
+});
+```
+
+### 2. Display Newsletter with Plans
+
+```typescript
+// Each newsletter can have multiple plans (free and paid)
+const newsletter = collections[0];
+
+console.log('Plans:');
+newsletter.plans.forEach(plan => {
+  console.log('- Plan ID:', plan.id);
+  console.log('  Name:', plan.name);
+  console.log('  Description:', plan.description);
+  
+  if (plan.price) {
+    console.log('  Price:', plan.price.amount); // cents
+    console.log('  Currency:', plan.price.currency);
+    console.log('  Interval:', plan.price.interval); // MONTHLY, YEARLY
+  } else {
+    console.log('  Price: FREE');
+  }
+  
+  console.log('  Features:', plan.features); // Array of feature strings
+});
+```
+
+### 3. Subscribe to Free Plan
+
+```typescript
+// Subscribe user to free newsletter
+const subscription = await sdk.cms.subscribeToCollection({
+  collectionId: newsletter.id,
+  email: 'user@example.com',
+  planId: 'plan_free', // Must match a plan ID from newsletter.plans
+});
+
+console.log('Subscribed!');
+console.log('Subscription ID:', subscription.id);
+console.log('Email:', subscription.email);
+console.log('Status:', subscription.status); // 'ACTIVE'
+```
+
+### 4. Subscribe to Paid Plan (Stripe Checkout)
+
+```typescript
+// Paid subscriptions redirect to Stripe
+const result = await sdk.cms.subscribeToCollection({
+  collectionId: newsletter.id,
+  email: 'user@example.com',
+  planId: 'plan_premium', // Paid plan
+});
+
+// For paid plans, you get a checkout URL
+if (result.checkoutUrl) {
+  console.log('Redirecting to payment...');
+  window.location.href = result.checkoutUrl;
+}
+```
+
+### 5. Handle Post-Payment Redirect
+
+After Stripe payment, user is redirected back to your site:
+
+```typescript
+// On your /newsletter/success page
+const urlParams = new URLSearchParams(window.location.search);
+const subscriptionId = urlParams.get('subscription_id');
+
+if (subscriptionId) {
+  // Show success message
+  console.log('Subscription activated!');
+  
+  // Optionally fetch subscription details
+  // (This would require an authenticated endpoint or subscription token)
+}
+```
+
+### 6. Unsubscribe
+
+```typescript
+// Unsubscribe using token (sent in newsletter emails)
+await sdk.cms.unsubscribeFromCollection({
+  token: 'unsubscribe_token_from_email',
+});
+
+console.log('Unsubscribed successfully');
+```
+
+---
+
+## Complete React Component Example
+
+```tsx
+import { useState, useEffect } from 'react';
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({ /* config */ });
+
+export function NewsletterList() {
+  const [newsletters, setNewsletters] = useState([]);
+  const [email, setEmail] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    loadNewsletters();
+  }, []);
+  
+  async function loadNewsletters() {
+    const { items } = await sdk.cms.getCollections({ type: 'NEWSLETTER' });
+    setNewsletters(items);
+  }
+  
+  async function handleSubscribe(newsletter, plan) {
+    if (!email) {
+      alert('Please enter your email');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      const result = await sdk.cms.subscribeToCollection({
+        collectionId: newsletter.id,
+        email,
+        planId: plan.id,
+      });
+      
+      // Paid plan - redirect to Stripe
+      if (result.checkoutUrl) {
+        window.location.href = result.checkoutUrl;
+        return;
+      }
+      
+      // Free plan - show success
+      alert('Subscribed successfully!');
+      setEmail('');
+    } catch (error) {
+      alert('Subscription failed: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  return (
+    <div className="newsletter-grid">
+      {newsletters.map(newsletter => (
+        <div key={newsletter.id} className="newsletter-card">
+          <h2>{newsletter.name}</h2>
+          <p>{newsletter.description}</p>
+          
+          <div className="plans">
+            {newsletter.plans.map(plan => (
+              <div key={plan.id} className="plan">
+                <h3>{plan.name}</h3>
+                <p className="price">
+                  {plan.price 
+                    ? `$${(plan.price.amount / 100).toFixed(2)}/${plan.price.interval.toLowerCase()}`
+                    : 'FREE'
+                  }
+                </p>
+                <ul>
+                  {plan.features.map((feature, i) => (
+                    <li key={i}>{feature}</li>
+                  ))}
+                </ul>
+                
+                <input
+                  type="email"
+                  placeholder="Your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                
+                <button
+                  onClick={() => handleSubscribe(newsletter, plan)}
+                  disabled={loading}
+                >
+                  {plan.price ? 'Subscribe & Pay' : 'Subscribe Free'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+## Get Subscribers (Admin Only)
+
+```typescript
+// Requires authenticated token with admin permissions
+const { items: subscribers, cursor } = await sdk.cms.getCollectionSubscribers({
+  id: newsletter.id,
+  limit: 50,
+  cursor: null,
+});
+
+subscribers.forEach(sub => {
+  console.log('Email:', sub.email);
+  console.log('Plan:', sub.planId);
+  console.log('Status:', sub.status); // ACTIVE, CANCELLED, EXPIRED
+  console.log('Subscribed:', new Date(sub.createdAt * 1000));
+});
+```
+
+---
+
+## Edge Cases
+
+### Duplicate Subscriptions
+```typescript
+try {
+  await sdk.cms.subscribeToCollection({
+    collectionId: newsletter.id,
+    email: 'existing@example.com',
+    planId: 'plan_free',
+  });
+} catch (error) {
+  if (error.message.includes('already subscribed') || error.message.includes('duplicate')) {
+    alert('You are already subscribed to this newsletter');
+  } else {
+    alert('Subscription failed: ' + error.message);
+  }
+}
+```
+
+### Invalid Email
+```typescript
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+if (!isValidEmail(email)) {
+  alert('Please enter a valid email address');
+  return;
+}
+```
+
+### Payment Failure
+Handle Stripe payment cancellation:
+
+```typescript
+// Check URL params for payment status
+const urlParams = new URLSearchParams(window.location.search);
+const paymentStatus = urlParams.get('payment_status');
+
+if (paymentStatus === 'cancelled') {
+  console.log('Payment was cancelled');
+  // Show message and allow retry
+}
+```
+
+---
+
+## Newsletter Email Sending (Admin)
+
+Admins can send newsletter entries to all subscribers:
+
+```typescript
+// Create a newsletter entry first
+const entry = await sdk.cms.createCollectionEntry({
+  collectionId: newsletter.id,
+  blocks: [
+    {
+      key: 'subject',
+      type: 'TEXT',
+      value: 'Monthly Update - November 2024',
+    },
+    {
+      key: 'content',
+      type: 'TEXT',
+      value: { en: '<p>Newsletter content here...</p>' },
+    },
+  ],
+});
+
+// Send to all subscribers
+await sdk.cms.sendEntry({
+  entryId: entry.id,
+  scheduledAt: Math.floor(Date.now() / 1000), // Send immediately
+  // Or schedule for later:
+  // scheduledAt: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+});
+```
+
+---
+
+## Unsubscribe Page
+
+```astro
+---
+// src/pages/unsubscribe.astro
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({ /* config */ });
+
+const urlParams = new URL(Astro.request.url).searchParams;
+const token = urlParams.get('token');
+
+let success = false;
+let error = null;
+
+if (token) {
+  try {
+    await sdk.cms.unsubscribeFromCollection({ token });
+    success = true;
+  } catch (e) {
+    error = e.message;
+  }
+}
+---
+
+<div class="unsubscribe-page">
+  {success && (
+    <div class="success">
+      <h1>Unsubscribed Successfully</h1>
+      <p>You've been removed from the mailing list.</p>
+    </div>
+  )}
+  
+  {error && (
+    <div class="error">
+      <h1>Unsubscribe Failed</h1>
+      <p>{error}</p>
+    </div>
+  )}
+  
+  {!token && (
+    <div class="error">
+      <h1>Invalid Link</h1>
+      <p>This unsubscribe link is invalid or expired.</p>
+    </div>
+  )}
+</div>
+```
+
+---
+
+## Plan Structure Reference
+
+```typescript
+interface NewsletterPlan {
+  id: string;              // 'plan_free', 'plan_premium'
+  name: string;            // 'Free Edition', 'Premium'
+  description: string;     // Plan description
+  price?: {
+    amount: number;        // Price in cents (999 = $9.99)
+    currency: string;      // 'usd', 'eur', etc.
+    interval: 'MONTHLY' | 'YEARLY';
+  };
+  features: string[];      // ['Feature 1', 'Feature 2']
+}
+```
+
+---
+
+## Real-World Example
+
+**[arky.io Implementation](https://github.com/0xdjole/arky.io)**:
+- `/src/lib/Newsletter/NewsletterList.svelte` - Newsletter listing
+- `/src/lib/Newsletter/NewsletterCard.svelte` - Plan cards
+- `/src/pages/[...locale]/newsletters.astro` - Newsletter page
+
+**Key Patterns**:
+- Guest token for public browsing
+- Email validation before API call
+- Graceful error handling for duplicates
+- Stripe redirect for paid plans
+- Token-based unsubscribe links
+
+---
+
+## Next Steps
+
+- **[Authentication Integration](/guides/integrations/auth/)** - Add user accounts
+- **[CMS API Reference](/api/cms/)** - Full newsletter API docs

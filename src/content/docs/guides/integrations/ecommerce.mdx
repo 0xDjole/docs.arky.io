@@ -1,0 +1,343 @@
+---
+title: E-commerce Integration
+description: Build a complete e-commerce flow with product listings, cart, and checkout
+---
+
+# E-commerce Integration
+
+Learn how to integrate Arky's e-commerce features into your application with this step-by-step guide.
+
+## What You'll Build
+
+- Product listing page
+- Product detail page with variants
+- Shopping cart state management
+- Quote calculation (pricing with tax, shipping, promo codes)
+- Checkout with Stripe payment
+- Order confirmation
+
+## Prerequisites
+
+- **Token Type**: Guest token for browsing, authenticated token optional for user features
+- **Payment Setup**: Stripe account configured in your Arky business
+- **Environment**: Works in SSR (Astro, Next.js) or CSR (React, Vue, Svelte)
+
+---
+
+## Complete Integration Flow
+
+### 1. Initialize SDK (Client-Side)
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  storageUrl: 'https://storage.arky.io',
+  autoGuest: true, // Automatically create guest token
+  
+  getToken: () => ({
+    accessToken: localStorage.getItem('accessToken') || '',
+    refreshToken: localStorage.getItem('refreshToken') || '',
+    provider: 'GUEST',
+    expiresAt: parseInt(localStorage.getItem('expiresAt') || '0'),
+  }),
+  
+  setToken: (tokens) => {
+    localStorage.setItem('accessToken', tokens.accessToken);
+    if (tokens.refreshToken) localStorage.setItem('refreshToken', tokens.refreshToken);
+    if (tokens.expiresAt) localStorage.setItem('expiresAt', tokens.expiresAt.toString());
+  },
+  
+  logout: () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('expiresAt');
+  },
+});
+```
+
+### 2. Fetch Products (Listing Page)
+
+```typescript
+// Get products with filters
+const { items: products, cursor } = await sdk.eshop.getProducts({
+  status: 'ACTIVE',
+  limit: 20,
+  cursor: null, // For pagination
+});
+
+// Products structure
+products.forEach(product => {
+  console.log(product.id);          // 'prod_123'
+  console.log(product.name);        // 'Premium T-Shirt'
+  console.log(product.slug);        // 'premium-t-shirt'
+  console.log(product.description); // Product description
+  console.log(product.gallery);     // Array of media objects
+  console.log(product.variants);    // Array of variants
+});
+```
+
+### 3. Get Product Details (Product Page)
+
+```typescript
+// Fetch single product with all variants
+const product = await sdk.eshop.getProduct({ id: 'prod_123' });
+
+// Access variants
+const defaultVariant = product.variants.find(v => v.isDefault) || product.variants[0];
+
+// Get pricing for current market
+const price = sdk.utils.getMarketPrice(defaultVariant.prices, 'us');
+console.log(price); // { amount: 2999, currency: 'usd' }
+
+// Format price for display
+const formatted = sdk.utils.formatMinor(price.amount, price.currency);
+console.log(formatted); // "$29.99"
+
+// Check inventory
+if (defaultVariant.stock > 0) {
+  console.log('In stock:', defaultVariant.stock);
+} else {
+  console.log('Out of stock');
+}
+```
+
+### 4. Build Cart State (Client-Side)
+
+```typescript
+// Cart is managed in client state (React state, Svelte store, etc.)
+interface CartItem {
+  productId: string;
+  variantId: string;
+  quantity: number;
+  product?: Product; // Optional: store product data for display
+}
+
+const cartItems: CartItem[] = [];
+
+// Add to cart
+function addToCart(productId: string, variantId: string, quantity: number) {
+  const existing = cartItems.find(
+    item => item.productId === productId && item.variantId === variantId
+  );
+  
+  if (existing) {
+    existing.quantity += quantity;
+  } else {
+    cartItems.push({ productId, variantId, quantity });
+  }
+  
+  // Save to localStorage for persistence
+  localStorage.setItem('cart', JSON.stringify(cartItems));
+}
+
+// Update quantity
+function updateQuantity(itemId: number, newQuantity: number) {
+  if (newQuantity <= 0) {
+    cartItems.splice(itemId, 1);
+  } else {
+    cartItems[itemId].quantity = newQuantity;
+  }
+  localStorage.setItem('cart', JSON.stringify(cartItems));
+}
+
+// Remove item
+function removeItem(itemId: number) {
+  cartItems.splice(itemId, 1);
+  localStorage.setItem('cart', JSON.stringify(cartItems));
+}
+```
+
+### 5. Get Quote (Calculate Total with Tax & Shipping)
+
+```typescript
+// Get quote with current cart items
+const quote = await sdk.eshop.getQuote({
+  currency: 'usd',
+  paymentMethod: 'CREDIT_CARD',
+  items: cartItems.map(item => ({
+    productId: item.productId,
+    variantId: item.variantId,
+    quantity: item.quantity,
+  })),
+  shippingMethodId: 'shipping_standard', // Required
+  promoCode: 'SAVE10', // Optional
+});
+
+// Quote response
+console.log('Subtotal:', quote.subtotal);      // 5998 (cents)
+console.log('Tax:', quote.tax);                // 420
+console.log('Shipping:', quote.shipping);      // 500
+console.log('Discount:', quote.discount);      // 600 (from promo code)
+console.log('Total:', quote.total);            // 6318
+
+// Format for display
+const totalFormatted = sdk.utils.formatMinor(quote.total, quote.currency);
+console.log(totalFormatted); // "$63.18"
+```
+
+:::tip[When to Call getQuote]
+Re-fetch the quote whenever:
+- Cart items change (add/remove/update quantity)
+- Shipping method changes
+- Promo code is applied/removed
+- User address changes (affects tax calculation)
+:::
+
+### 6. Checkout (Create Order & Payment)
+
+```typescript
+// Checkout with Stripe payment
+const result = await sdk.eshop.checkout({
+  paymentMethod: 'CREDIT_CARD',
+  shippingMethodId: 'shipping_standard',
+  items: cartItems.map(item => ({
+    productId: item.productId,
+    variantId: item.variantId,
+    quantity: item.quantity,
+  })),
+  blocks: [
+    // Optional: Add shipping address or custom fields
+    {
+      key: 'shipping_address',
+      type: 'TEXT',
+      value: '123 Main St, New York, NY 10001',
+    },
+  ],
+  promoCode: 'SAVE10', // Optional
+});
+
+// Response for credit card payments
+if (result.checkoutUrl) {
+  // Redirect user to Stripe checkout page
+  window.location.href = result.checkoutUrl;
+}
+
+// For cash payments (if enabled)
+if (result.orderId && !result.checkoutUrl) {
+  console.log('Order created:', result.orderId);
+  // Show success message for cash on delivery
+}
+```
+
+### 7. Handle Payment Redirect (After Stripe)
+
+After successful payment, Stripe redirects back to your return URL.
+
+```typescript
+// On your /checkout/success page
+const urlParams = new URLSearchParams(window.location.search);
+const orderId = urlParams.get('order_id');
+
+if (orderId) {
+  // Fetch order details to confirm
+  const order = await sdk.eshop.getOrder({ id: orderId });
+  
+  console.log('Order status:', order.statuses[order.statuses.length - 1].status);
+  console.log('Payment status:', order.paymentStatus[order.paymentStatus.length - 1].status);
+  
+  // Clear cart
+  localStorage.removeItem('cart');
+  
+  // Show success message
+}
+```
+
+---
+
+## Client State to Store
+
+### Essential State
+- **Cart Items**: `Array<{ productId, variantId, quantity }>`
+- **Selected Shipping Method**: `string` (shipping method ID)
+- **Applied Promo Code**: `string | null`
+- **Quote Response**: `Quote` object (ephemeral, refetch as needed)
+
+### Storage Strategy
+- **localStorage**: Cart items, promo code (persist across sessions)
+- **Memory/Component State**: Quote, selected shipping (temporary)
+- **Don't Store**: Payment tokens, sensitive user data
+
+---
+
+## Common Edge Cases
+
+### Variant Out of Stock
+```typescript
+// Before adding to cart, check stock
+const product = await sdk.eshop.getProduct({ id: productId });
+const variant = product.variants.find(v => v.id === variantId);
+
+if (variant.stock <= 0) {
+  alert('Sorry, this variant is out of stock');
+  return;
+}
+
+if (variant.stock < requestedQuantity) {
+  alert(`Only ${variant.stock} available`);
+  return;
+}
+```
+
+### Price Changes Between Quote and Checkout
+The quote is ephemeral and prices can change. Always show the latest quote to users before checkout.
+
+```typescript
+// Get fresh quote right before checkout
+const latestQuote = await sdk.eshop.getQuote({ ... });
+
+// Confirm with user if price changed
+if (latestQuote.total !== previousQuote.total) {
+  const proceed = confirm('Price has changed. Continue with new total?');
+  if (!proceed) return;
+}
+
+// Proceed with checkout
+await sdk.eshop.checkout({ ... });
+```
+
+### Invalid Promo Code
+```typescript
+try {
+  const quote = await sdk.eshop.getQuote({
+    items: cartItems,
+    promoCode: 'INVALID_CODE',
+    currency: 'usd',
+    paymentMethod: 'CREDIT_CARD',
+    shippingMethodId: 'shipping_standard',
+  });
+} catch (error) {
+  if (error.message.includes('promo')) {
+    alert('Invalid or expired promo code');
+  }
+}
+```
+
+---
+
+## Real-World Example
+
+See the complete implementation in the [arky.io website](https://github.com/0xdjole/arky.io):
+
+**Files**:
+- `/src/lib/EShop/Products/index.svelte` - Product listing
+- `/src/lib/EShop/Cart/index.svelte` - Cart & checkout flow
+- `/src/lib/core/stores/eshop.ts` - Cart state management
+
+**Key Patterns**:
+- Guest token for browsing (auto-created)
+- Client-side cart state with localStorage persistence
+- Quote refetch on cart changes
+- Stripe redirect flow for payments
+
+---
+
+## Next Steps
+
+- **[Reservations Integration](/guides/integrations/reservations/)** - Add booking functionality
+- **[CMS Integration](/guides/integrations/cms/)** - Add content pages
+- **[E-shop API Reference](/api/eshop/)** - Detailed API documentation
+- **[Payment Configuration](/core-concepts/#payments)** - Configure Stripe and other payment methods

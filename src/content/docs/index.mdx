@@ -39,23 +39,33 @@ Arky is a comprehensive business platform that combines essential tools into one
 ## Quick Start
 
 ```typescript
-import { ArkySDK } from 'arky-sdk';
+import { createArkySDK } from 'arky-sdk';
 
-const sdk = new ArkySDK({
-  apiUrl: 'https://api.arky.io',
-  businessId: 'your_business_id',
-  apiKey: 'your_api_key',
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  autoGuest: true,
+  getToken: () => JSON.parse(localStorage.getItem('arky_token') || 'null'),
+  setToken: (token) => localStorage.setItem('arky_token', JSON.stringify(token)),
+  logout: () => localStorage.removeItem('arky_token'),
 });
 
-// Fetch products
-const products = await sdk.eshop.getProducts({ limit: 10 });
+// Get products
+const { items } = await sdk.eshop.getProducts({ limit: 20 });
 
-// Create a reservation
-const reservation = await sdk.reservation.createReservation({
-  serviceId: 'service_123',
-  providerId: 'provider_456',
-  startTime: 1698765432,
-  endTime: 1698769032,
+// Get services
+const { items: services } = await sdk.reservation.getServices({ limit: 20 });
+
+// Get providers
+const { items: providers } = await sdk.reservation.getProviders({ limit: 50 });
+
+// Get available slots
+const slots = await sdk.reservation.getAvailableSlots({
+  serviceId: 'svc_123',
+  providerId: 'prov_456',
+  from: startTime,
+  to: endTime,
 });
 ```
 
@@ -80,19 +90,19 @@ Arky is built with modern, scalable technologies:
 - **Analytics**: ClickHouse
 - **Storage**: S3-compatible
 
-## Next Steps
+## Docs
 
 <CardGrid>
-  <Card title="Introduction" icon="open-book">
-    [Learn about core concepts →](/introduction/)
-  </Card>
   <Card title="Quick Start" icon="rocket">
-    [Get up and running in minutes →](/quick-start/)
+    [Get started in 5 minutes →](/quick-start/)
   </Card>
-  <Card title="API Reference" icon="setting">
-    [Explore the complete API →](/api/business/)
+  <Card title="Integration Guides" icon="puzzle">
+    [E-commerce, bookings, CMS →](/guides/integrations/ecommerce/)
   </Card>
-  <Card title="Guides" icon="puzzle">
-    [Follow step-by-step tutorials →](/guides/blocks/)
+  <Card title="API Reference" icon="document">
+    [Complete API docs →](/api/eshop/)
+  </Card>
+  <Card title="SDK on GitHub" icon="github">
+    [View source code →](https://github.com/0xdjole/arky-sdk)
   </Card>
 </CardGrid>

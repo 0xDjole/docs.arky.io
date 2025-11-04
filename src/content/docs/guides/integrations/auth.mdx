@@ -1,0 +1,549 @@
+---
+title: Authentication Integration
+description: Implement user registration, login, and profile management
+---
+
+# Authentication Integration
+
+Add user authentication to your application with email/password and OAuth flows.
+
+## What You'll Build
+
+- User registration and login
+- Token management (guest, authenticated, server)
+- Protected routes and features
+- Profile viewing and updates
+- OAuth integration (Google, etc.)
+
+## Prerequisites
+
+- **Token Types**: Understand guest, authenticated, and server tokens
+- **Environment**: Can be implemented in SSR or CSR
+- **Security**: Server-side token storage for SSR recommended
+
+---
+
+## Token Strategy Overview
+
+Arky uses three token types:
+
+### Guest Token (Public)
+- **When**: Anonymous browsing (products, services, content)
+- **How**: `autoGuest: true` in SDK config
+- **Storage**: Short-lived, client-side (localStorage or memory)
+
+### Authenticated Token (User)
+- **When**: After login, for user-specific actions (checkout, bookings, profile)
+- **How**: Obtained from `login()` or `register()`
+- **Storage**: Client-side (secure cookies or localStorage), refresh on expiry
+
+### Server Token (API Key)
+- **When**: Server-side rendering (SSR) for public content
+- **How**: API key from environment variable
+- **Storage**: Server-only, never expose to client
+
+---
+
+## Complete Authentication Flow
+
+### 1. SDK Initialization with Guest Token
+
+```typescript
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({
+  baseUrl: 'https://api.arky.io',
+  businessId: 'your-business-id',
+  market: 'us',
+  
+  autoGuest: true, // Automatically fetch guest token
+  
+  getToken: () => {
+    const token = localStorage.getItem('arky_token');
+    return token ? JSON.parse(token) : null;
+  },
+  
+  setToken: (token) => {
+    if (token) {
+      localStorage.setItem('arky_token', JSON.stringify(token));
+    }
+  },
+  
+  logout: () => {
+    localStorage.removeItem('arky_token');
+  },
+});
+```
+
+### 2. User Registration
+
+```typescript
+// Register new user with email and password
+const result = await sdk.user.register({
+  email: 'user@example.com',
+  password: 'SecurePass123!',
+  firstName: 'John',
+  lastName: 'Doe',
+  // Optional fields
+  phoneNumbers: ['+1234567890'], // Note: array of phone numbers
+});
+
+console.log('User registered!');
+console.log('User ID:', result.user.id);
+console.log('Email:', result.user.email);
+
+// Token is automatically stored via setToken callback
+console.log('Token stored:', localStorage.getItem('arky_token'));
+```
+
+### 3. User Login
+
+```typescript
+// Login existing user
+const result = await sdk.user.login({
+  email: 'user@example.com',
+  password: 'SecurePass123!',
+});
+
+console.log('Logged in!');
+console.log('User:', result.user);
+console.log('Access token:', result.token.accessToken);
+console.log('Expires at:', new Date(result.token.expiresAt * 1000));
+
+// Token is automatically stored
+```
+
+### 4. Get Current User Profile
+
+```typescript
+// Fetch logged-in user's profile
+const me = await sdk.user.me();
+
+console.log('Email:', me.email);
+console.log('Name:', me.firstName, me.lastName);
+console.log('Phone Numbers:', me.phoneNumbers); // Array
+console.log('Created:', new Date(me.createdAt * 1000));
+```
+
+### 5. Update User Profile
+
+```typescript
+// Update profile information
+const updatedUser = await sdk.user.updateUser({
+  id: me.id,
+  firstName: 'Jane',
+  lastName: 'Smith',
+  phoneNumbers: ['+9876543210', '+1112223333'], // Multiple phone numbers
+});
+
+console.log('Profile updated!');
+console.log('New name:', updatedUser.firstName, updatedUser.lastName);
+```
+
+### 6. Logout
+
+```typescript
+// Logout and clear token
+await sdk.user.logout();
+
+console.log('Logged out');
+// Token automatically removed via logout callback
+```
+
+---
+
+## Token Refresh
+
+Handle token expiration gracefully:
+
+```typescript
+async function ensureValidToken() {
+  const tokenData = sdk.getToken();
+  
+  if (!tokenData) {
+    // No token - user is guest
+    return;
+  }
+  
+  const now = Math.floor(Date.now() / 1000);
+  
+  // Check if token expired
+  if (tokenData.expiresAt > 0 && tokenData.expiresAt < now) {
+    console.log('Token expired, logging out...');
+    await sdk.user.logout();
+    
+    // Optionally redirect to login
+    window.location.href = '/login';
+  }
+}
+
+// Check on app init and periodically
+ensureValidToken();
+setInterval(ensureValidToken, 60000); // Check every minute
+```
+
+---
+
+## OAuth Integration (Google)
+
+### 1. Initiate OAuth Flow
+
+```typescript
+// Redirect to OAuth provider
+const oauthUrl = await sdk.user.getOAuthUrl({
+  provider: 'GOOGLE',
+  redirectUri: 'https://yourapp.com/auth/callback',
+});
+
+window.location.href = oauthUrl;
+```
+
+### 2. Handle OAuth Callback
+
+```typescript
+// On your /auth/callback page
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get('code');
+const state = urlParams.get('state');
+
+if (code) {
+  try {
+    const result = await sdk.user.loginWithOAuth({
+      provider: 'GOOGLE',
+      code,
+      redirectUri: 'https://yourapp.com/auth/callback',
+    });
+    
+    console.log('OAuth login successful!');
+    console.log('User:', result.user);
+    
+    // Token stored automatically
+    // Redirect to dashboard
+    window.location.href = '/dashboard';
+  } catch (error) {
+    console.error('OAuth failed:', error);
+    window.location.href = '/login?error=oauth_failed';
+  }
+}
+```
+
+---
+
+## Protected Routes (React Example)
+
+```tsx
+import { useEffect, useState } from 'react';
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({ /* config */ });
+
+function ProtectedRoute({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    checkAuth();
+  }, []);
+  
+  async function checkAuth() {
+    try {
+      const me = await sdk.user.me();
+      setUser(me);
+    } catch (error) {
+      // Not authenticated - redirect to login
+      window.location.href = '/login';
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+  
+  return children;
+}
+
+// Usage
+<ProtectedRoute>
+  <DashboardPage />
+</ProtectedRoute>
+```
+
+---
+
+## Auth Context Provider (React)
+
+```tsx
+import { createContext, useContext, useState, useEffect } from 'react';
+import { createArkySDK } from 'arky-sdk';
+
+const sdk = createArkySDK({ /* config */ });
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    loadUser();
+  }, []);
+  
+  async function loadUser() {
+    try {
+      const me = await sdk.user.me();
+      setUser(me);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function login(email, password) {
+    const result = await sdk.user.login({ email, password });
+    setUser(result.user);
+    return result;
+  }
+  
+  async function register(email, password, firstName, lastName) {
+    const result = await sdk.user.register({ email, password, firstName, lastName });
+    setUser(result.user);
+    return result;
+  }
+  
+  async function logout() {
+    await sdk.user.logout();
+    setUser(null);
+  }
+  
+  return (
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+// Usage in components
+function Profile() {
+  const { user, logout } = useAuth();
+  
+  return (
+    <div>
+      <h1>Welcome, {user?.firstName}!</h1>
+      <button onClick={logout}>Logout</button>
+    </div>
+  );
+}
+```
+
+---
+
+## SSR Token Handling (Astro Example)
+
+```astro
+---
+// src/middleware/auth.ts
+import { defineMiddleware } from 'astro:middleware';
+import { createArkySDK } from 'arky-sdk';
+
+export const onRequest = defineMiddleware(async ({ request, cookies, locals }, next) => {
+  const token = cookies.get('arky_token')?.value;
+  
+  if (token) {
+    try {
+      const tokenData = JSON.parse(token);
+      
+      const sdk = createArkySDK({
+        baseUrl: import.meta.env.ARKY_API_URL,
+        businessId: import.meta.env.ARKY_BUSINESS_ID,
+        autoGuest: false,
+        getToken: () => tokenData,
+        setToken: () => {},
+        logout: () => {},
+      });
+      
+      const user = await sdk.user.me();
+      locals.user = user;
+      locals.sdk = sdk;
+    } catch (error) {
+      // Token invalid - clear it
+      cookies.delete('arky_token');
+    }
+  }
+  
+  return next();
+});
+
+---
+
+// src/pages/dashboard.astro
+---
+const user = Astro.locals.user;
+
+if (!user) {
+  return Astro.redirect('/login');
+}
+---
+
+<h1>Welcome, {user.firstName}!</h1>
+<p>Email: {user.email}</p>
+```
+
+---
+
+## Error Handling
+
+### Invalid Credentials
+
+```typescript
+try {
+  await sdk.user.login({ email, password });
+} catch (error) {
+  if (error.message.includes('invalid') || error.message.includes('credentials')) {
+    alert('Invalid email or password');
+  } else {
+    alert('Login failed: ' + error.message);
+  }
+}
+```
+
+### Email Already Exists
+
+```typescript
+try {
+  await sdk.user.register({ email, password, firstName, lastName });
+} catch (error) {
+  if (error.message.includes('exists') || error.message.includes('duplicate')) {
+    alert('An account with this email already exists');
+  } else {
+    alert('Registration failed: ' + error.message);
+  }
+}
+```
+
+### Token Expired
+
+```typescript
+try {
+  const me = await sdk.user.me();
+} catch (error) {
+  if (error.message.includes('token') || error.message.includes('unauthorized')) {
+    console.log('Token expired, redirecting to login...');
+    await sdk.user.logout();
+    window.location.href = '/login';
+  }
+}
+```
+
+---
+
+## User Fields Reference
+
+### Supported Fields
+
+```typescript
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phoneNumbers: string[];    // Array of phone numbers
+  createdAt: number;         // Unix timestamp
+  updatedAt: number;         // Unix timestamp
+  
+  // Business-specific custom fields may exist
+}
+```
+
+### Update Pattern
+
+```typescript
+// Only update fields you want to change
+await sdk.user.updateUser({
+  id: user.id,
+  firstName: 'NewFirstName', // Optional
+  phoneNumbers: ['+1234567890'], // Optional
+  // Don't send fields you don't want to update
+});
+```
+
+---
+
+## Best Practices
+
+### Secure Token Storage
+
+**Client-side (Browser)**:
+```typescript
+// Use secure cookies in production
+document.cookie = `arky_token=${JSON.stringify(token)}; Secure; HttpOnly; SameSite=Strict`;
+```
+
+**Server-side (Astro, Next.js)**:
+```typescript
+// Store in encrypted HTTP-only cookies
+cookies.set('arky_token', JSON.stringify(token), {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'strict',
+  maxAge: 60 * 60 * 24 * 7, // 7 days
+});
+```
+
+### Password Requirements
+
+Enforce strong passwords on client:
+
+```typescript
+function isStrongPassword(password: string): boolean {
+  return (
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password)
+  );
+}
+
+if (!isStrongPassword(password)) {
+  alert('Password must be at least 8 characters with uppercase, lowercase, and number');
+  return;
+}
+```
+
+### Email Validation
+
+```typescript
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+```
+
+---
+
+## Real-World Example
+
+**[arky.io Implementation](https://github.com/0xdjole/arky.io)**:
+- `/src/lib/arky.ts` - SDK initialization with token handlers
+- `/src/lib/Auth/Login.svelte` - Login form
+- `/src/lib/Auth/Register.svelte` - Registration form
+- `/src/middleware.ts` - SSR auth middleware
+
+**Key Patterns**:
+- Token stored in encrypted cookies for SSR
+- Guest token auto-generated for anonymous browsing
+- Auth context provider for React-like state management
+- Protected routes check `me()` before rendering
+
+---
+
+## Next Steps
+
+- **[E-commerce Integration](/guides/integrations/ecommerce/)** - Add checkout with authenticated users
+- **[Reservations Integration](/guides/integrations/reservations/)** - Book services as logged-in user
+- **[Users API Reference](/api/users/)** - Full authentication API docs

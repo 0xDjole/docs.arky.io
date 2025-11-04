@@ -1,0 +1,192 @@
+---
+title: Reservation Booking Integration
+description: Implement a complete booking system with services, providers, and time slots
+---
+
+# Reservation Booking Integration
+
+Build a booking system that lets users browse services, check availability, and book appointments.
+
+## What You'll Build
+
+- Service listing page
+- Provider selection
+- Available time slot selection
+- Booking with payment
+- Confirmation and booking management
+
+## Prerequisites
+
+- **Token Type**: Guest token for browsing, authenticated optional
+- **Payment Setup**: Stripe configured for paid bookings
+- **Environment**: Client-side or server-side
+
+---
+
+## Complete Booking Flow
+
+### 1. List Services
+
+```typescript
+// Fetch available services
+const { items: services, cursor } = await sdk.reservation.getServices({
+  limit: 50,
+  cursor: null,
+});
+
+services.forEach(service => {
+  console.log(service.id);          // 'svc_123'
+  console.log(service.name);        // 'Haircut'
+  console.log(service.duration);    // 1800 (seconds)
+  console.log(service.prices);      // Market-based pricing
+  console.log(service.providerIds); // Available providers
+});
+```
+
+### 2. Get Service Details
+
+```typescript
+const service = await sdk.reservation.getService({ id: 'svc_123' });
+
+// Get pricing for current market
+const price = sdk.utils.getMarketPrice(service.prices, 'us');
+console.log(sdk.utils.formatMinor(price.amount, price.currency)); // "$35.00"
+```
+
+### 3. Get Available Slots
+
+```typescript
+// Get slots for next 7 days
+const now = Math.floor(Date.now() / 1000);
+const oneWeek = now + (7 * 24 * 3600);
+
+const slots = await sdk.reservation.getAvailableSlots({
+  serviceId: 'svc_123',
+  providerId: 'prov_456', // Optional: filter by provider
+  from: now,
+  to: oneWeek,
+  limit: 1000,
+});
+
+slots.forEach(slot => {
+  console.log('Provider:', slot.providerId);
+  console.log('Start:', new Date(slot.startTime * 1000));
+  console.log('End:', new Date(slot.endTime * 1000));
+});
+```
+
+### 4. Get Quote
+
+```typescript
+// Calculate pricing for selected slot
+const quote = await sdk.reservation.getQuote({
+  currency: 'usd',
+  paymentMethod: 'CREDIT_CARD',
+  parts: [{
+    serviceId: 'svc_123',
+    providerId: 'prov_456',
+    startTime: selectedSlot.startTime,
+    endTime: selectedSlot.endTime,
+  }],
+  promoCode: 'FIRST20', // Optional
+});
+
+console.log('Total:', sdk.utils.formatMinor(quote.total, quote.currency));
+```
+
+### 5. Checkout & Book
+
+```typescript
+const result = await sdk.reservation.checkout({
+  parts: [{
+    serviceId: 'svc_123',
+    providerId: 'prov_456',
+    startTime: selectedSlot.startTime,
+    endTime: selectedSlot.endTime,
+  }],
+  paymentMethod: 'CREDIT_CARD',
+  blocks: [
+    // Customer notes
+    {
+      key: 'notes',
+      type: 'TEXT',
+      value: 'Please use scissors only, no clippers',
+    },
+  ],
+  promoCode: 'FIRST20',
+});
+
+// Redirect to payment if needed
+if (result.checkoutUrl) {
+  window.location.href = result.checkoutUrl;
+}
+```
+
+### 7. Get Reservation Details
+
+```typescript
+// After booking or on confirmation page
+const reservation = await sdk.reservation.getReservation({ id: 'res_123' });
+
+console.log('Status:', reservation.statuses[reservation.statuses.length - 1].status);
+console.log('Parts:', reservation.parts);
+console.log('Total:', reservation.total);
+```
+
+---
+
+## Client State
+
+- **Selected Service**: Service object
+- **Selected Provider**: Provider ID
+- **Selected Slot**: `{ startTime, endTime }`
+- **Quote**: Ephemeral, refetch on changes
+- **Customer Notes/Preferences**: Temporary form data
+
+---
+
+## Edge Cases
+
+### Slot Race Condition
+Slots can be booked by others while user is deciding. Always handle booking failures gracefully:
+
+```typescript
+try {
+  await sdk.reservation.checkout({ ... });
+} catch (error) {
+  if (error.message.includes('unavailable') || error.message.includes('booked')) {
+    alert('This slot is no longer available. Please select another time.');
+    // Refetch available slots
+  }
+}
+```
+
+### Timezone Handling
+Times are in Unix timestamps (UTC). Convert to user's timezone for display:
+
+```typescript
+const userDate = new Date(slot.startTime * 1000);
+console.log(userDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+```
+
+---
+
+## Real-World Example
+
+**[arky.io Implementation](https://github.com/0xdjole/arky.io)**:
+- `/src/lib/Reservation/Services/index.svelte` - Service listing
+- `/src/lib/Reservation/AvailableSlots/index.svelte` - Slot selection
+- `/src/lib/core/stores/reservation.ts` - Booking state
+
+**Key Patterns**:
+- Guest token for browsing
+- Real-time slot availability checks
+- Timezone-aware display
+- Graceful handling of booking conflicts
+
+---
+
+## Next Steps
+
+- **[E-commerce Integration](/guides/integrations/ecommerce/)** - Add product sales
+- **[Reservations API Reference](/api/reservations/)** - Full API docs
