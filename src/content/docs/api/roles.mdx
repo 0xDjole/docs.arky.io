@@ -1,0 +1,86 @@
+---
+title: Roles API
+description: Manage roles and permissions
+---
+
+## Overview
+
+The Roles API allows you to create and manage roles with custom permissions for your business.
+
+## Methods
+
+### `createRole(params, options?)`
+
+Create a new role.
+
+```typescript
+await arky.role.createRole({
+  name: 'Editor',
+  parentRoles: ['viewer-role-id'],
+  permissions: [{ action: 'WRITE', resource: 'cms' }]
+});
+```
+
+**Parameters:**
+- `name` (string, required): Role name
+- `parentRoles` (string[], optional): Parent role IDs to inherit from
+- `permissions` (array, optional): Permission definitions
+
+### `getRoles(params, options?)`
+
+Get all roles for the business.
+
+```typescript
+const roles = await arky.role.getRoles({
+  action: 'READ'
+});
+```
+
+**Parameters:**
+- `action` (string, required): Filter by action type (e.g., `'READ'`, `'WRITE'`)
+
+### `getRole(params, options?)`
+
+Get a single role by ID.
+
+```typescript
+const role = await arky.role.getRole({ id: 'role-id' });
+```
+
+**Parameters:**
+- `id` (string, required): Role ID
+
+### `updateRole(params, options?)`
+
+Update an existing role.
+
+```typescript
+await arky.role.updateRole({
+  id: 'role-id',
+  name: 'Updated Name',
+  permissions: [{ action: 'WRITE', resource: 'cms' }]
+});
+```
+
+**Parameters:**
+- `id` (string, required): Role ID
+- `name` (string, optional): New role name
+- `parentRoles` (string[], optional): Updated parent roles
+- `permissions` (array, optional): Updated permissions
+
+### `deleteRole(params, options?)`
+
+Delete a role.
+
+```typescript
+await arky.role.deleteRole({ id: 'role-id' });
+```
+
+**Parameters:**
+- `id` (string, required): Role ID to delete
+
+## Endpoint
+
+**Base URL:** `/v1/roles`
+
+**Authentication:** Required

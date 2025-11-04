@@ -1,0 +1,119 @@
+---
+title: Promo Codes API
+description: Manage promotional codes and discounts
+---
+
+## Overview
+
+Create and manage promo codes for orders and reservations.
+
+## Methods
+
+### `createPromoCode(params, options?)`
+
+Create a new promo code.
+
+```typescript
+await arky.promoCode.createPromoCode({
+  code: 'SAVE20',
+  discounts: [
+    {
+      type: 'ITEMS_PERCENTAGE',
+      marketId: 'US',
+      bps: 2000 // 20%
+    }
+  ],
+  conditions: [
+    {
+      type: 'MIN_ORDER_AMOUNT',
+      value: 5000 // $50.00 in cents
+    },
+    {
+      type: 'DATE_RANGE',
+      value: {
+        start: 1704067200,
+        end: 1735689599
+      }
+    }
+  ]
+});
+```
+
+**Parameters:**
+- `code` (string, required): Promo code
+- `discounts` (array, required): Array of discount objects
+  - `type`: `'ITEMS_PERCENTAGE'`, `'ITEMS_FIXED'`, or `'SHIPPING_PERCENTAGE'`
+  - `marketId` (string): Market ID (e.g., 'US')
+  - `bps` (number, optional): Basis points for percentage (e.g., 2000 = 20%)
+  - `amount` (number, optional): Fixed amount in cents
+- `conditions` (array, required): Array of condition objects
+  - `type`: `'PRODUCTS'`, `'SERVICES'`, `'MIN_ORDER_AMOUNT'`, `'DATE_RANGE'`, `'MAX_USES'`, `'MAX_USES_PER_USER'`
+  - `value`: String array (for PRODUCTS/SERVICES), number (for amounts/counts), or object with start/end (for DATE_RANGE)
+
+### `getPromoCodes(params, options?)`
+
+List all promo codes.
+
+```typescript
+const promoCodes = await arky.promoCode.getPromoCodes({
+  statuses: ['ACTIVE'],
+  limit: 50
+});
+```
+
+**Parameters:**
+- `statuses` (string[], optional): Filter by status
+- `query` (string, optional): Search query
+- `limit` (number, optional): Results per page
+- `cursor` (string, optional): Pagination cursor
+
+### `getPromoCode(params, options?)`
+
+Get a single promo code by ID.
+
+```typescript
+const promoCode = await arky.promoCode.getPromoCode({ id: 'promo-id' });
+```
+
+**Parameters:**
+- `id` (string, required): Promo code ID
+
+### `updatePromoCode(params, options?)`
+
+Update an existing promo code.
+
+```typescript
+await arky.promoCode.updatePromoCode({
+  id: 'promo-id',
+  code: 'SAVE20',
+  discounts: [...],
+  conditions: [...],
+  statuses: [
+    { status: 'INACTIVE', changedBy: 'USER', timestamp: Date.now() }
+  ]
+});
+```
+
+**Parameters:**
+- `id` (string, required): Promo code ID
+- `code` (string, required): Promo code
+- `discounts` (array, required): Same as `createPromoCode`
+- `conditions` (array, required): Same as `createPromoCode`
+- `statuses` (array, optional): Status events
+
+### `deletePromoCode(params, options?)`
+
+Delete a promo code.
+
+```typescript
+await arky.promoCode.deletePromoCode({ id: 'promo-id' });
+```
+
+**Parameters:**
+- `id` (string, required): Promo code ID
+
+## Endpoint
+
+**Base URL:** `/v1/businesses/{businessId}/promo-codes`
+
+**Authentication:** Required

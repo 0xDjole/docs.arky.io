@@ -1,0 +1,60 @@
+---
+title: Analytics API
+description: Business metrics and insights
+---
+
+## Overview
+
+Get real-time business metrics powered by ClickHouse.
+
+## Methods
+
+### `getAnalytics(params, options?)`
+
+Get business analytics metrics.
+
+```typescript
+const analytics = await arky.analytics.getAnalytics({
+  period: '30d',
+  interval: 'total'
+});
+```
+
+**Parameters:**
+- `metrics` (string[], optional): Specific metrics to fetch (revenue, orders, reservations, etc.)
+- `period` (string, optional): Time period (`'7d'`, `'30d'`, `'90d'`, `'365d'`)
+- `startDate` (string, optional): Custom start date (ISO 8601)
+- `endDate` (string, optional): Custom end date (ISO 8601)
+- `interval` (string, optional): Aggregation interval (`'total'`, `'day'`, `'week'`, `'month'`)
+
+**Response:**
+```typescript
+{
+  period: { start: string, end: string },
+  interval: string,
+  dates: string[],
+  metrics: {
+    [key: string]: {
+      values: number[],
+      unit?: string,
+      displayName: string,
+      description?: string
+    }
+  }
+}
+```
+
+**Available metrics:**
+- `revenue` - Total revenue
+- `orders`, `pending_orders`, `shipped_orders`, `completed_orders`, `cancelled_orders`
+- `reservations`, `pending_reservations`, `confirmed_reservations`, `completed_reservations`, `cancelled_reservations`
+- `active_services`, `inactive_services`
+- `active_providers`, `inactive_providers`
+- `active_products`, `inactive_products`
+- `total_users`, `active_users`
+
+## Endpoint
+
+**Base URL:** `/v1/analytics/{businessId}`
+
+**Authentication:** Required

@@ -1,0 +1,41 @@
+---
+title: Notifications API
+description: Email tracking and delivery statistics
+---
+
+## Overview
+
+Track email opens and get delivery statistics.
+
+## Methods
+
+### `trackEmailOpen(params, options?)`
+
+Track email notification opens (used internally by tracking pixels).
+
+```typescript
+await arky.notification.trackEmailOpen({
+  trackingPixelId: 'pixel-id'
+});
+```
+
+**Parameters:**
+- `trackingPixelId` (string, required): Tracking pixel ID
+
+### `getDeliveryStats(params, options?)`
+
+Get notification delivery statistics for the business.
+
+```typescript
+const stats = await arky.notification.getDeliveryStats({});
+```
+
+**Response:**
+Returns delivery statistics including sent, delivered, opened, and failed counts.
+
+## Endpoints
+
+- **Track Email:** `GET /v1/notifications/track/email/{tracking_pixel_id}`
+- **Delivery Stats:** `GET /v1/notifications/track/stats/{business_id}`
+
+**Authentication:** Required for stats endpoint, public for tracking pixel
