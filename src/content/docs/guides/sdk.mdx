@@ -69,10 +69,6 @@ const sdk = createArkySDK({
     window.location.href = '/login';
   },
   autoGuest: true, // Automatically create guest token if none exists
-  notify: (opts) => {
-    // Optional: Show toast notifications
-    alert(`${opts.type.toUpperCase()}: ${opts.message}`);
-  },
   isAuthenticated: () => {
     return !!localStorage.getItem('accessToken');
   },
@@ -91,8 +87,20 @@ const sdk = createArkySDK({
 | `setToken` | `(tokens) => void` | ✅ | — | Function to persist tokens |
 | `logout` | `() => void` | ✅ | — | Function to clear auth and redirect |
 | `autoGuest` | `boolean` | ❌ | `true` | Auto-create guest token on init |
-| `notify` | `(opts) => void` | ❌ | — | Toast/notification callback |
 | `isAuthenticated` | `() => boolean` | ❌ | `() => false` | Check if user is authenticated |
+
+---
+
+## Per-call callbacks (non-GET)
+
+You can pass callbacks to handle success/error locally for mutating requests. GET requests do not invoke callbacks.
+
+```typescript
+await sdk.user.updateUser({ name: 'Alice' }, {
+  onSuccess: ({ data }) => toast('Profile updated'),
+  onError: ({ error }) => toast(error.message || 'Update failed'),
+});
+```
 
 ---
 
